@@ -49,6 +49,7 @@ program
   .option("-s, --server [url]", "Webdriver remote server")
   .option("-p, --params [list]", "General parameters")
   .option("-f, --filter [string]", "Run suites matching name")
+  .option("-t, --accesstoken [string]", "Salesforce accessToken")
   .option("-w, --max-workers [number]", "Maximum amount of workers that will run your tests, defaults to number of cores")
   .option("--base-url [url]", "Override the base URL that was set in the IDE")
   .option("--timeout [number | undefined]", `The maximimum amount of time, in milliseconds, to spend attempting to locate an element. (default: ${DEFAULT_TIMEOUT})`)
@@ -276,6 +277,16 @@ const projects = [...program.args.reduce((projects, project) => {
 }, new Set())].map(p => {
   const project = JSON.parse(fs.readFileSync(p));
   project.path = p;
+  if (program.accesstoken) {
+    project.tests[0].commands.unshift({
+      "id": uuidV4(),
+      "comment": "",
+      "command": "open",
+      "target": `/secur/frontdoor.jsp?sid=${program.accesstoken}`,
+      "targets": [],
+      "value": ""
+    });
+  }
   return project;
 });
 
