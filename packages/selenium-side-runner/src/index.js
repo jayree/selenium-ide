@@ -70,24 +70,24 @@ if (!program.args.length && !program.run) {
 }
 
 const logger = winston.createLogger({
-  level: 'info',
+  level: "info",
   format: winston.format.cli(),
   transports: [
-    new winston.transports.Console(),
+    new winston.transports.Console()
     //new winston.transports.File({ filename: 'logfile.log' })
   ]
 }, {
-  level: 'warn',
+  level: "warn",
   format: winston.format.cli(),
   transports: [
-    new winston.transports.Console(),
+    new winston.transports.Console()
     //new winston.transports.File({ filename: 'logfile.log' })
   ]
 }, {
-  level: 'debug',
+  level: "debug",
   format: winston.format.cli(),
   transports: [
-    new winston.transports.Console(),
+    new winston.transports.Console()
     //new winston.transports.File({ filename: 'logfile.log' })
   ]
 });
@@ -225,8 +225,8 @@ function runProject(project) {
 function runJest(project) {
   return new Promise((resolve, reject) => {
     const args = [
-        "--testMatch", `{**/*${program.filter}*/*.test.js,**/*${program.filter}*.test.js}`
-      ].concat(program.maxWorkers ? ["-w", program.maxWorkers] : [])
+      "--testMatch", `{**/*${program.filter}*/*.test.js,**/*${program.filter}*.test.js}`
+    ].concat(program.maxWorkers ? ["-w", program.maxWorkers] : [])
       .concat(program.outputDirectory ? ["--json", "--outputFile", path.join(program.outputDirectory, `${project.name}.json`)] : []);
     const opts = {
       cwd: path.join(process.cwd(), projectPath),
@@ -287,9 +287,9 @@ const projects = [...program.args.reduce((projects, project) => {
       "value": ""
     });
   }
-  if (logger.level == 'debug') {
-    var new_commands = [];
-    for (var i in project.tests[0].commands) {
+  if (logger.level == "debug") {
+    let new_commands = [];
+    for (let i in project.tests[0].commands) {
       new_commands.push(project.tests[0].commands[i]);
       if (project.tests[0].commands[i].value != "") {
         if (project.tests[0].commands[i].command == "type") {
