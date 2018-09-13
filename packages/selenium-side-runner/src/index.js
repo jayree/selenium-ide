@@ -287,6 +287,34 @@ const projects = [...program.args.reduce((projects, project) => {
       "value": ""
     });
   }
+  if (logger.level == 'debug') {
+    var new_commands = [];
+    for (var i in project.tests[0].commands) {
+      new_commands.push(project.tests[0].commands[i]);
+      if (project.tests[0].commands[i].value != "") {
+        if (project.tests[0].commands[i].command == "type") {
+          new_commands.push({
+            "id": uuidV4(),
+            "comment": "",
+            "command": "echo",
+            "target": `type: ${project.tests[0].commands[i].value}`,
+            "targets": [],
+            "value": ""
+          });
+        } else {
+          new_commands.push({
+            "id": uuidV4(),
+            "comment": "",
+            "command": "echo",
+            "target": `${project.tests[0].commands[i].value}: \${${project.tests[0].commands[i].value}}`,
+            "targets": [],
+            "value": ""
+          });
+        }
+      }
+    }
+    project.tests[0].commands = new_commands;
+  }
   return project;
 });
 
