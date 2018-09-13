@@ -28,23 +28,23 @@
     ]
   },
   "dependencies": {
-    "commander": "^2.12.2",
-    "glob": "^7.1.2",
+    "commander": "^2.18.0",
+    "glob": "^7.1.3",
     "global-npm": "^0.3.0",
-    "jest": "23.4.2",
+    "jest": "23.6.0",
     "jest-environment-selenium": "^1.1.0",
-    "js-beautify": "^1.7.5",
-    "js-yaml": "^3.10.0",
+    "js-beautify": "^1.8.6",
+    "js-yaml": "^3.12.0",
     "rimraf": "^2.6.2",
-    "selenium-webdriver": "^3.6.0",
+    "selenium-webdriver": "^4.0.0-alpha.1",
     "selianize": "^3.3.1",
     "semver": "^5.5.1",
-    "winston": "^2.4.0"
+    "winston": "^3.1.0"
   },
   "devDependencies": {
     "babel-cli": "^6.26.0",
     "babel-preset-node8": "^1.2.0",
-    "npm": "^6.0.0",
+    "npm": "^6.4.1",
     "pkg": "https://github.com/corevo/pkg#a5a5e8717ca7ce17f51c32b4f82883f5cea9839a"
   }
 }
