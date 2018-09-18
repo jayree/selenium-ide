@@ -278,42 +278,46 @@ const projects = [...program.args.reduce((projects, project) => {
   const project = JSON.parse(fs.readFileSync(p));
   project.path = p;
   if (program.accesstoken) {
-    project.tests[0].commands.unshift({
-      "id": uuidV4(),
-      "comment": "",
-      "command": "open",
-      "target": `/secur/frontdoor.jsp?sid=${program.accesstoken}`,
-      "targets": [],
-      "value": ""
+    project.tests.forEach(t => {
+      t.commands.unshift({
+        "id": uuidV4(),
+        "comment": "",
+        "command": "open",
+        "target": `/secur/frontdoor.jsp?sid=${program.accesstoken}`,
+        "targets": [],
+        "value": ""
+      });
     });
   }
   if (logger.level == "debug") {
-    let new_commands = [];
-    for (let i in project.tests[0].commands) {
-      new_commands.push(project.tests[0].commands[i]);
-      if (project.tests[0].commands[i].value != "") {
-        if (project.tests[0].commands[i].command == "type") {
-          new_commands.push({
-            "id": uuidV4(),
-            "comment": "",
-            "command": "echo",
-            "target": `type: ${project.tests[0].commands[i].value}`,
-            "targets": [],
-            "value": ""
-          });
-        } else {
-          new_commands.push({
-            "id": uuidV4(),
-            "comment": "",
-            "command": "echo",
-            "target": `${project.tests[0].commands[i].value}: \${${project.tests[0].commands[i].value}}`,
-            "targets": [],
-            "value": ""
-          });
+    project.tests.forEach(t => {
+      let new_commands = [];
+      for (let i in t.commands) {
+        new_commands.push(t.commands[i]);
+        if (t.commands[i].value != "") {
+          if (t.commands[i].command == "type") {
+            new_commands.push({
+              "id": uuidV4(),
+              "comment": "",
+              "command": "echo",
+              "target": `type: ${t.commands[i].value}`,
+              "targets": [],
+              "value": ""
+            });
+          } else {
+            new_commands.push({
+              "id": uuidV4(),
+              "comment": "",
+              "command": "echo",
+              "target": `${t.commands[i].value}: \${${t.commands[i].value}}`,
+              "targets": [],
+              "value": ""
+            });
+          }
         }
       }
-    }
-    project.tests[0].commands = new_commands;
+      t.commands = new_commands;
+    });
   }
   return project;
 });
