@@ -4,7 +4,7 @@
   "description": "Run Selenium IDE projects in cli",
   "repository": "https://github.com/SeleniumHQ/selenium-ide",
   "scripts": {
-    "build": "babel -d dist src --ignore=__test__",
+    "build": "babel --out-dir dist src --ignore=__test__ --verbose",
     "pkg": "pkg package.json --targets=node9-linux-x64,node9-macos-x64,node9-windows-x64 --out-path=dist/bin",
     "prepublishOnly": "yarn build"
   },
@@ -42,8 +42,10 @@
     "winston": "^3.1.0"
   },
   "devDependencies": {
-    "babel-cli": "^6.26.0",
-    "babel-preset-node8": "^1.2.0",
+    "@babel/cli": "7.1.0",
+    "@babel/core": "7.1.0",
+    "@babel/preset-env": "7.1.0",
+    "babel-core": "7.0.0-bridge.0",
     "npm": "^6.4.1",
     "pkg": "https://github.com/corevo/pkg#a5a5e8717ca7ce17f51c32b4f82883f5cea9839a"
   }
