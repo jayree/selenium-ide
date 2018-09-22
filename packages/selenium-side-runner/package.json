@@ -46,6 +46,7 @@
     "@babel/core": "7.1.0",
     "@babel/preset-env": "7.1.0",
     "babel-core": "7.0.0-bridge.0",
+    "babel-jest": "23.6.0",
     "npm": "^6.4.1",
     "pkg": "https://github.com/corevo/pkg#a5a5e8717ca7ce17f51c32b4f82883f5cea9839a"
   }
