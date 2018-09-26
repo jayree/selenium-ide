@@ -20,17 +20,23 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import { fork } from "child_process";
+import {
+  fork
+} from "child_process";
 import program from "commander";
 import winston from "winston";
 import glob from "glob";
 import rimraf from "rimraf";
-import { js_beautify as beautify } from "js-beautify";
+import {
+  js_beautify as beautify
+} from "js-beautify";
 import Selianize from "selianize";
 import Capabilities from "./capabilities";
 import Config from "./config";
 import Satisfies from "./versioner";
 import metadata from "../package.json";
+import uuidV4 from "uuid/v4";
+
 
 const DEFAULT_TIMEOUT = 15000;
 
@@ -43,6 +49,7 @@ program
   .option("-s, --server [url]", "Webdriver remote server")
   .option("-p, --params [list]", "General parameters")
   .option("-f, --filter [string]", "Run suites matching name")
+  .option("-t, --accesstoken [string]", "Salesforce accessToken")
   .option("-w, --max-workers [number]", "Maximum amount of workers that will run your tests, defaults to number of cores")
   .option("--base-url [url]", "Override the base URL that was set in the IDE")
   .option("--timeout [number | undefined]", `The maximimum amount of time, in milliseconds, to spend attempting to locate an element. (default: ${DEFAULT_TIMEOUT})`)
@@ -62,11 +69,32 @@ if (!program.args.length && !program.run) {
   process.exit(1);
 }
 
-winston.cli();
-winston.level = program.debug ? "debug" : "info";
+const logger = winston.createLogger({
+  level: "info",
+  format: winston.format.cli(),
+  transports: [
+    new winston.transports.Console()
+    //new winston.transports.File({ filename: 'logfile.log' })
+  ]
+}, {
+  level: "warn",
+  format: winston.format.cli(),
+  transports: [
+    new winston.transports.Console()
+    //new winston.transports.File({ filename: 'logfile.log' })
+  ]
+}, {
+  level: "debug",
+  format: winston.format.cli(),
+  transports: [
+    new winston.transports.Console()
+    //new winston.transports.File({ filename: 'logfile.log' })
+  ]
+});
+logger.level = program.debug ? "debug" : "info";
 
 if (program.extract || program.run) {
-  winston.warn("This feature is used by Selenium IDE maintainers for debugging purposes, we hope you know what you're doing!");
+  logger.warn("This feature is used by Selenium IDE maintainers for debugging purposes, we hope you know what you're doing!");
 }
 
 const configuration = {
@@ -82,15 +110,15 @@ const configurationFilePath = program.configurationFile || ".side.yml";
 try {
   Object.assign(configuration, Config.load(path.join(process.cwd(), configurationFilePath)));
 } catch (e) {
-  winston.debug("Could not load " + configurationFilePath);
+  logger.debug("Could not load " + configurationFilePath);
 }
 
 program.filter = program.filter || "*";
 configuration.server = program.server ? program.server : configuration.server;
 
-configuration.timeout = program.timeout ? +program.timeout
-  : configuration.timeout ? +configuration.timeout
-  : DEFAULT_TIMEOUT; // eslint-disable-line indent
+configuration.timeout = program.timeout ? +program.timeout :
+  configuration.timeout ? +configuration.timeout :
+  DEFAULT_TIMEOUT; // eslint-disable-line indent
 
 if (configuration.timeout === "undefined") configuration.timeout = undefined;
 
@@ -98,7 +126,7 @@ if (program.capabilities) {
   try {
     Object.assign(configuration.capabilities, Capabilities.parseString(program.capabilities));
   } catch (e) {
-    winston.debug("Failed to parse inline capabilities");
+    logger.debug("Failed to parse inline capabilities");
   }
 }
 
@@ -106,7 +134,7 @@ if (program.params) {
   try {
     Object.assign(configuration.params, Capabilities.parseString(program.params));
   } catch (e) {
-    winston.debug("Failed to parse additional params");
+    logger.debug("Failed to parse additional params");
   }
 }
 
@@ -115,15 +143,15 @@ configuration.baseUrl = program.baseUrl ? program.baseUrl : configuration.baseUr
 let projectPath;
 
 function runProject(project) {
-  winston.info(`Running ${project.path}`);
+  logger.info(`Running ${project.path}`);
   let warning;
   try {
     warning = Satisfies(project.version, "1.1");
-  } catch(e) {
+  } catch (e) {
     return Promise.reject(e);
   }
   if (warning) {
-    winston.warn(warning);
+    logger.warn(warning);
   }
   if (!project.suites.length) {
     return Promise.reject(new Error(`The project ${project.name} has no test suites defined, create a suite using the IDE.`));
@@ -143,7 +171,9 @@ function runProject(project) {
     dependencies: project.dependencies || {}
   }));
 
-  return Selianize(project, { silenceErrors: true }, project.snapshot).then((code) => {
+  return Selianize(project, {
+    silenceErrors: true
+  }, project.snapshot).then((code) => {
     const tests = code.tests.reduce((tests, test) => {
       return tests += test.code;
     }, "const tests = {};").concat("module.exports = tests;");
@@ -166,7 +196,10 @@ function runProject(project) {
       let npmInstall;
       if (project.dependencies && Object.keys(project.dependencies).length) {
         npmInstall = new Promise((resolve, reject) => {
-          const child = fork(require.resolve("./npm"), { cwd: path.join(process.cwd(), projectPath), stdio: "inherit" });
+          const child = fork(require.resolve("./npm"), {
+            cwd: path.join(process.cwd(), projectPath),
+            stdio: "inherit"
+          });
           child.on("exit", (code) => {
             if (code) {
               reject();
@@ -195,11 +228,14 @@ function runJest(project) {
       "--testMatch", `{**/*${program.filter}*/*.test.js,**/*${program.filter}*.test.js}`
     ].concat(program.maxWorkers ? ["-w", program.maxWorkers] : [])
       .concat(program.outputDirectory ? ["--json", "--outputFile", path.join(program.outputDirectory, `${project.name}.json`)] : []);
-    const opts = { cwd: path.join(process.cwd(), projectPath), stdio: "inherit" };
-    winston.debug("jest worker args");
-    winston.debug(args);
-    winston.debug("jest work opts");
-    winston.debug(opts);
+    const opts = {
+      cwd: path.join(process.cwd(), projectPath),
+      stdio: "inherit"
+    };
+    logger.debug("jest worker args");
+    logger.debug(args);
+    logger.debug("jest work opts");
+    logger.debug(JSON.stringify(opts));
     const child = fork(require.resolve("./child"), args, opts);
 
     child.on("exit", (code) => {
@@ -222,13 +258,15 @@ function runAll(projects, index = 0) {
     return runAll(projects, ++index);
   }).catch((error) => {
     process.exitCode = 1;
-    error && winston.error(error.message + "\n");
+    error && logger.error(error.message + "\n");
     return runAll(projects, ++index);
   });
 }
 
 function writeJSFile(name, data, postfix = ".test.js") {
-  fs.writeFileSync(`${name}${postfix}`, beautify(data, { indent_size: 2 }));
+  fs.writeFileSync(`${name}${postfix}`, beautify(data, {
+    indent_size: 2
+  }));
 }
 
 const projects = [...program.args.reduce((projects, project) => {
@@ -239,6 +277,48 @@ const projects = [...program.args.reduce((projects, project) => {
 }, new Set())].map(p => {
   const project = JSON.parse(fs.readFileSync(p));
   project.path = p;
+  if (program.accesstoken) {
+    project.tests.forEach(t => {
+      t.commands.unshift({
+        "id": uuidV4(),
+        "comment": "",
+        "command": "open",
+        "target": `/secur/frontdoor.jsp?sid=${program.accesstoken}`,
+        "targets": [],
+        "value": ""
+      });
+    });
+  }
+  if (logger.level == "debug") {
+    project.tests.forEach(t => {
+      let new_commands = [];
+      for (let i in t.commands) {
+        new_commands.push(t.commands[i]);
+        if (t.commands[i].value != "") {
+          if (t.commands[i].command == "type") {
+            new_commands.push({
+              "id": uuidV4(),
+              "comment": "",
+              "command": "echo",
+              "target": `type: ${t.commands[i].value}`,
+              "targets": [],
+              "value": ""
+            });
+          } else {
+            new_commands.push({
+              "id": uuidV4(),
+              "comment": "",
+              "command": "echo",
+              "target": `${t.commands[i].value}: \${${t.commands[i].value}}`,
+              "targets": [],
+              "value": ""
+            });
+          }
+        }
+      }
+      t.commands = new_commands;
+    });
+  }
   return project;
 });
 
@@ -256,7 +336,7 @@ if (program.run) {
   projectPath = program.run;
   runJest({
     name: "test"
-  }).catch(winston.error);
+  }).catch(logger.error);
 } else {
   runAll(projects);
 }
