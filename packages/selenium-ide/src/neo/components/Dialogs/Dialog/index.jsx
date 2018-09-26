@@ -18,8 +18,9 @@
 import React from "react";
 import PropTypes from "prop-types";
 import classNames from "classnames";
-import info from "../../assets/images/tick.png";
-import warn from "../../assets/images/warning.png";
+import RemoveButton from "../../ActionButtons/Remove";
+import info from "../../../assets/images/tick.png";
+import warn from "../../../assets/images/warning.png";
 import "./style.css";
 
 const images = {
@@ -35,7 +36,8 @@ export default class DialogContainer extends React.Component {
     children: PropTypes.node.isRequired,
     renderTitle: PropTypes.func,
     renderImage: PropTypes.func,
-    renderFooter: PropTypes.func
+    renderFooter: PropTypes.func,
+    onRequestClose: PropTypes.func
   };
   render() {
     return (
@@ -47,6 +49,15 @@ export default class DialogContainer extends React.Component {
           <div className="dialog__title">
             {this.props.renderTitle ? this.props.renderTitle() : <h2>{this.props.title}</h2>}
           </div>
+          <RemoveButton
+            onClick={this.props.onRequestClose ? this.props.onRequestClose : null}
+            style={{
+              color: "white",
+              position: "absolute",
+              top: 0,
+              right: 0
+            }}
+          />
         </div>
         <div className="dialog__contents">
           <form onSubmit={(e) => { e.preventDefault(); }}>

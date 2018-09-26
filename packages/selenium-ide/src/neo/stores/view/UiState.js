@@ -50,7 +50,6 @@ class UiState {
   @observable options = {
     recordNotifications: true
   };
-  @observable completedWelcome = false;
   @observable pauseNotificationSent = false;
 
   constructor() {
@@ -241,18 +240,18 @@ class UiState {
     this.filterTerm = term;
   }
 
-  @action.bound async toggleRecord() {
-    await (this.isRecording ? this.stopRecording() : this.startRecording());
+  @action.bound async toggleRecord(isInvalid) {
+    await (this.isRecording ? this.stopRecording() : this.startRecording(isInvalid));
   }
 
   @action.bound beforeRecording() {
   }
 
-  @action.bound async startRecording() {
+  @action.bound async startRecording(isInvalid) {
     try {
       let startingUrl = this.baseUrl;
       if (!startingUrl) {
-        startingUrl = await ModalState.selectBaseUrl();
+        startingUrl = await ModalState.selectBaseUrl(isInvalid);
       }
       await this.recorder.attach(startingUrl);
       this._setRecordingState(true);
@@ -260,7 +259,17 @@ class UiState {
     } catch (err) {
       ModalState.showAlert({
         title: "Could not start recording",
-        description: err.message
+        description: err ? err.message : undefined
+      });
+    }
+  }
+
+  nameNewTest() {
+    const test = this.selectedTest.test;
+    const isNewTest = true;
+    if (test.name === "Untitled") {
+      ModalState.renameTest(test.name, isNewTest).then(name => {
+        test.setName(name);
       });
     }
   }
@@ -269,6 +278,7 @@ class UiState {
     await this.recorder.detach();
     this._setRecordingState(false);
     await this.emitRecordingState();
+    await this.nameNewTest();
   }
 
   // Do not call this method directly, use start and stop
@@ -434,10 +444,6 @@ class UiState {
       state.modified = false;
     });
     this._project.setModified(false);
-  }
-
-  @action.bound completeWelcome() {
-    this.completedWelcome = true;
   }
 }
 

@@ -24,6 +24,9 @@ class ModalState {
   @observable importSuiteState = {};
   @observable suiteSettingsState = {};
   @observable baseUrlState = {};
+  @observable welcomeState = {
+    completed: false
+  };
 
   constructor() {
     this.renameTest = this.rename.bind(this, Types.test);
@@ -31,19 +34,28 @@ class ModalState {
     this.rename = this.rename.bind(this);
   }
 
-  @action.bound selectBaseUrl() {
-    return new Promise((res) => {
+  @action.bound selectBaseUrl(isInvalid = true) {
+    return new Promise((res, rej) => {
       this.baseUrlState = {
         selecting: true,
+        isInvalid,
         done: action((url) => {
           res(url);
-          this.baseUrlState = {};
+          this.baseUrlState = {
+            isInvalid
+          };
+        }),
+        cancel: action(() => {
+          rej();
+          this.baseUrlState = {
+            isInvalid
+          };
         })
       };
     });
   }
 
-  @action rename(type, value, cb) {
+  @action rename(type, value, isNewTest = false) {
     const verifyName = (name) => {
       let names;
       if (type === Types.test) names = UiState._project.tests;
@@ -51,21 +63,27 @@ class ModalState {
 
       return name === value || this.nameIsUnique(name, names);
     };
-    this.renameState = {
-      original: value,
-      value,
-      type,
-      verify: verifyName,
-      done: (name) => {
-        if (verifyName(name)) {
-          cb(name);
-          if (type === Types.test) {
-            this.renameRunCommands(this.renameState.original, name);
+    return new Promise((res) => {
+      this.renameState = {
+        original: value,
+        value,
+        type,
+        verify: verifyName,
+        isNewTest,
+        done: (name) => {
+          if (verifyName(name)) {
+            res(name);
+            if (type === Types.test) {
+              this.renameRunCommands(this.renameState.original, name);
+            }
+            this.cancelRenaming();
           }
+        },
+        cancel: () => {
           this.cancelRenaming();
         }
-      }
-    };
+      };
+    });
   }
 
   @action.bound editSuite(suite) {
@@ -77,13 +95,13 @@ class ModalState {
   }
 
   @action.bound createSuite() {
-    this.rename(Types.suite, null, (name) => {
+    this.renameSuite(undefined).then(name => {
       if (name) this._project.createSuite(name);
     });
   }
 
   @action.bound createTest() {
-    this.rename(Types.test, null, (name) => {
+    this.renameTest(undefined).then(name => {
       if (name) {
         const test = this._project.createTestCase(name);
         UiState.selectTest(test);
@@ -164,6 +182,10 @@ class ModalState {
         }
       });
     });
+  }
+
+  @action.bound completeWelcome() {
+    this.welcomeState = { completed: true };
   }
 }
 
