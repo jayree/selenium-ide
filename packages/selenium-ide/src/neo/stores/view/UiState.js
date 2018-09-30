@@ -248,11 +248,11 @@ class UiState {
   }
 
   @action.bound async startRecording(isInvalid) {
+    let startingUrl = this.baseUrl;
+    if (!startingUrl) {
+      startingUrl = await ModalState.selectBaseUrl(isInvalid);
+    }
     try {
-      let startingUrl = this.baseUrl;
-      if (!startingUrl) {
-        startingUrl = await ModalState.selectBaseUrl(isInvalid);
-      }
       await this.recorder.attach(startingUrl);
       this._setRecordingState(true);
       await this.emitRecordingState();
@@ -264,21 +264,20 @@ class UiState {
     }
   }
 
-  nameNewTest() {
+  nameNewTest(isEnabled = true) {
     const test = this.selectedTest.test;
-    const isNewTest = true;
-    if (test.name === "Untitled") {
-      ModalState.renameTest(test.name, isNewTest).then(name => {
+    if (isEnabled && test.name === "Untitled") {
+      ModalState.renameTest(test.name, { isNewTest: true }).then(name => {
         test.setName(name);
       });
     }
   }
 
-  @action.bound async stopRecording() {
+  @action.bound async stopRecording(opts = { nameNewTest: true }) {
     await this.recorder.detach();
     this._setRecordingState(false);
     await this.emitRecordingState();
-    await this.nameNewTest();
+    await this.nameNewTest(opts.nameNewTest);
   }
 
   // Do not call this method directly, use start and stop

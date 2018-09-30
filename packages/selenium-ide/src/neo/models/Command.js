@@ -35,6 +35,14 @@ export default class Command {
     this.export = this.export.bind(this);
   }
 
+  @computed get displayedName() {
+    return (this.enabled ? this.command : this.command.substr(2));
+  }
+
+  @computed get enabled() {
+    return (this.command && !this.command.startsWith("//"));
+  }
+
   @computed get isValid() {
     return Commands.array.includes(this.command);
   }
@@ -71,6 +79,14 @@ export default class Command {
 
   @action.bound toggleBreakpoint() {
     this.isBreakpoint = !this.isBreakpoint;
+  }
+
+  @action.bound toggleEnabled() {
+    if (this.enabled) {
+      this.setCommand("//" + this.command);
+    } else {
+      this.setCommand(this.command.substr(2));
+    }
   }
 
   @action.bound setData(jsRep){
@@ -179,6 +195,11 @@ export const ArgTypes = {
     name: "region",
     description: "Specify a rectangle with coordinates and lengths (e.g., \"x: \
                   257, y: 300, width: 462, height: 280\")."
+  },
+  resolution: {
+    name: "resolution",
+    description: "Specify a window resolution using WidthxHeight. (e.g., \
+                  1280x800)."
   },
   script: {
     name: "script",
@@ -607,6 +628,11 @@ class CommandList {
                     there is no such delay, e.g., the delay is 0 milliseconds. \
                     This setting is global, and will affect all test runs, until changed.",
       target: ArgTypes.waitTime
+    }],
+    [ "setWindowSize", {
+      name: "set window size",
+      description: "Set the browser's window size, including the browser's interface.",
+      target: ArgTypes.resolution
     }],
     [ "store", {
       name: "store",
