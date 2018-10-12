@@ -22,6 +22,7 @@ import { canExecuteCommand } from "../../../plugin/commandExecutor";
 import { createPlaybackTree } from "../../playback/playback-tree";
 import { ControlFlowCommandChecks } from "../../models/Command";
 import Logger from "../../stores/view/Logs";
+import { isProduction } from "../../../content/utils";
 
 let baseUrl = "";
 let ignoreBreakpoint = false;
@@ -139,7 +140,8 @@ function runNextCommand() {
     notifyWaitDeprecation(command);
     return PlaybackState.isSingleCommandRunning ? Promise.resolve() : executionLoop();
   } else {
-    return doPreparation()
+    return doPreWait()
+      .then(doPreparation)
       .then(doPrePageWait)
       .then(doPageWait)
       .then(doAjaxWait)
@@ -171,7 +173,7 @@ async function finishPlaying() {
 }
 
 function catchPlayingError(message) {
-  if (isReceivingEndError(message)) {
+  if (executor.isReceivingEndError(message)) {
     setTimeout(function() {
       playAfterConnectionFailed();
     }, 100);
@@ -193,6 +195,11 @@ function reportError(error, nonFatal, index) {
     message = "The current tab is invalid for testing (e.g. about:home), surf to a webpage before using the extension";
   }
   PlaybackState.setCommandState(id, nonFatal ? PlaybackStates.Failed : PlaybackStates.Fatal, message);
+}
+
+
+function doPreWait() {
+  return executor.waitForPageToLoad().then(() => true);
 }
 
 function doPreparation() {
@@ -268,7 +275,7 @@ function doDomWait(res, domTime, domCount = 0) {
 }
 
 function doCommand(res, implicitTime = Date.now(), implicitCount = 0) {
-  if (!PlaybackState.isSingleCommandRunning && (!PlaybackState.isPlaying || PlaybackState.paused)) return;
+  if (!PlaybackState.isSingleCommandRunning && (!PlaybackState.isPlaying || PlaybackState.isStopping || PlaybackState.paused)) return;
   const { command } = PlaybackState.currentExecutingCommandNode.command;
 
   let count = 0;
@@ -333,17 +340,21 @@ function doSeleniumCommand(commandNode, implicitTime, implicitCount) {
   });
 }
 
-function doPluginCommand(commandNode, implicitTime, implicitCount) {
-  const { id, target } = commandNode.command;
-  return PlaybackState.currentExecutingCommandNode.execute(executor, {
-    commandId: id,
+function getPluginOptions(node) {
+  return {
+    commandId: node.command.id,
     isNested: !!PlaybackState.callstack.length,
     runId: PlaybackState.runId,
     testId: PlaybackState.currentRunningTest.id,
     frameId: executor.getCurrentPlayingFrameId(),
     tabId: executor.getCurrentPlayingTabId(),
     windowId: executor.getCurrentPlayingWindowId()
-  }).then(result => {
+  };
+}
+
+function doPluginCommand(commandNode, implicitTime, implicitCount) {
+  const { id, target } = commandNode.command;
+  return PlaybackState.currentExecutingCommandNode.execute(executor, getPluginOptions(commandNode)).then(result => {
     PlaybackState.setCommandState(
       id,
       result.status ? result.status : PlaybackStates.Passed,
@@ -355,23 +366,25 @@ function doPluginCommand(commandNode, implicitTime, implicitCount) {
       return doImplicitWait(err.message, id, target, implicitTime, implicitCount);
     } else {
       PlaybackState.setCommandState(id, (err instanceof FatalError || err instanceof NoResponseError) ? PlaybackStates.Fatal : PlaybackStates.Failed, err.message);
+      return { next: undefined };
     }
   });
 }
 
 function isElementNotFound(error) {
-  return error.match(/Element[\s\S]*?not (found|visible)/);
+  return (error.match(/Element[\s\S]*?not (found|visible)/) || error === "Element is not currently visible and may not be manipulated");
 }
 
 async function doLocatorFallback() {
   const node = PlaybackState.currentExecutingCommandNode;
   const targets = node.command.targets;
   let result;
+  const options = canExecuteCommand(node.command.command) ? getPluginOptions(node) : undefined;
 
   for (let i = 0; i < targets.length; i++) {
     const target = targets[i][0];
-    result = await node.execute(executor, { target: target });
-    if (result.result === "success") {
+    result = await node.execute(executor, options, target);
+    if (result.hasOwnProperty("next")) {
       PlaybackState.setCommandState(node.command.id, PlaybackStates.Passed);
       Logger.warn(`Element found with secondary locator ${target}. To use it by default, update the test step to use it as the primary locator.`);
       break;
@@ -381,15 +394,20 @@ async function doLocatorFallback() {
   return result;
 }
 
+function getImplicitTimeout() {
+  return isProduction ? 30000 : 5000;
+}
+
 function doImplicitWait(error, commandId, target, implicitTime, implicitCount) {
+  const timeout = getImplicitTimeout();
   if (isStopping()) {
     PlaybackState.setCommandState(commandId, PlaybackStates.Fatal, "Playback aborted");
     return false;
   } else if (isElementNotFound(error)) {
-    if (implicitTime && (Date.now() - implicitTime > 30000)) {
+    if (implicitTime && (Date.now() - implicitTime > timeout)) {
       return doLocatorFallback().then(result => {
         if (result && result.result === "success") return result;
-        reportError("Implicit Wait timed out after 30000ms");
+        reportError(`Implicit Wait timed out after ${timeout}ms`);
         implicitCount = 0;
         implicitTime = "";
       });
@@ -418,17 +436,6 @@ function doDelay() {
 
 function notifyWaitDeprecation(command) {
   reportError(`${command} is deprecated, Selenium IDE waits automatically instead`, true);
-}
-
-function isReceivingEndError(reason) {
-  return (reason == "TypeError: response is undefined" ||
-    reason == "Error: Could not establish connection. Receiving end does not exist." ||
-    // Below message is for Google Chrome
-    reason.message == "Could not establish connection. Receiving end does not exist." ||
-    // Google Chrome misspells "response"
-    reason.message == "The message port closed before a reponse was received." ||
-    reason.message == "The message port closed before a response was received." ||
-    reason.message == "result is undefined"); // from command node eval
 }
 
 function isImplicitWait(command) {

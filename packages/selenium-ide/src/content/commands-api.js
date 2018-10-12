@@ -145,11 +145,13 @@ function doCommands(request, sender, sendResponse) {
         if (target) {
           browser.runtime.sendMessage({
             selectTarget: true,
-            target: [[target]]
+            target: [[target]],
+            selectNext: request.selectNext
           });
         } else {
           browser.runtime.sendMessage({
-            cancelSelectTarget: true
+            cancelSelectTarget: true,
+            selectNext: request.selectNext
           });
         }
       });
@@ -169,8 +171,14 @@ function doCommands(request, sender, sendResponse) {
 // show element
 function startShowElement(message){
   if (message.showElement) {
-    const result = selenium["doShowElement"](message.targetValue);
-    return Promise.resolve({ result: result });
+    try {
+      const result = selenium["doShowElement"](message.targetValue);
+      return Promise.resolve({ result: result });
+    } catch(e) {
+      // If we didn't find the element, it means that another frame might have found it,
+      // so we don't resolve the promise. If no frame finds it, then the promise will
+      // get rejected.
+    }
   }
 }
 

@@ -126,6 +126,7 @@ function addRecordingIndicator() {
     recordingIndicator.style["background-color"] = "whitesmoke";
     recordingIndicator.style["box-shadow"] = "7px 7px 10px 0 rgba(0,0,0,0.3)";
     recordingIndicator.style.transition = "bottom 100ms linear";
+    recordingIndicator.style["z-index"] = 1000000000000000;
     recordingIndicator.addEventListener("mouseenter", function(event) {
       event.target.style.visibility = "hidden";
       setTimeout(function() {
@@ -167,12 +168,25 @@ browser.runtime.onMessage.addListener(detachRecorderHandler);
     if (!currentParentWindow.frames.length) {
       break;
     }
-    for (let idx = 0; idx < currentParentWindow.frames.length; idx++)
-      if (currentParentWindow.frames[idx] === currentWindow) {
-        frameLocation = ":" + idx + frameLocation;
+
+    let indicator;
+    try {
+      indicator = currentParentWindow.document.getElementById("selenium-ide-indicator");
+    } catch(e) {
+      indicator = true;
+    }
+
+
+    for (let idx = 0; idx < currentParentWindow.frames.length; idx++) {
+      const frame = currentParentWindow.frames[idx];
+
+      if (frame === currentWindow) {
+        const index = (indicator && idx !== 0) ? idx - 1 : idx;
+        frameLocation = ":" + index + frameLocation;
         currentWindow = currentParentWindow;
         break;
       }
+    }
   }
   frameLocation = "root" + frameLocation;
 })();

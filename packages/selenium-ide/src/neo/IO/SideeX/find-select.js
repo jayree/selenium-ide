@@ -40,18 +40,18 @@ export async function find(target) {
     await browser.windows.update(tab.windowId, {
       focused: true
     });
-    await browser.tabs.sendMessage(tab.id, {
-      showElement: true,
-      targetValue: region.isValid() ? region.toJS() : target
-    }).then((response) => {
-      if (response && response.result === "element not found") {
-        ModalState.showAlert({
-          title: "Element not found",
-          description: `Could not find ${target} on the page`,
-          confirmLabel: "Close"
-        });
-      }
-    });
+    try {
+      await browser.tabs.sendMessage(tab.id, {
+        showElement: true,
+        targetValue: region.isValid() ? region.toJS() : target
+      });
+    } catch(e) {
+      ModalState.showAlert({
+        title: "Element not found",
+        description: `Could not find ${target} on the page`,
+        confirmLabel: "Close"
+      });
+    }
   } catch(e) {
     showNoTabAvailableDialog();
   }
@@ -80,14 +80,11 @@ export async function select(type, rect, selectNext = false) {
   }
 }
 
-function selectTarget(target, selectNext) {
+function selectTarget(target) {
   UiState.setSelectingTarget(false);
   if (UiState.selectedCommand) {
     UiState.selectedCommand.setTarget(target[0][0]);
     UiState.selectedCommand.setTargets(target);
-    if (selectNext) {
-      UiState.selectNextCommand();
-    }
   } else if (UiState.selectedTest.test) {
     const command = UiState.selectedTest.test.createCommand();
     command.setTarget(target[0][0]);
@@ -102,12 +99,15 @@ function endSelection(tabId) {
 
 function handleContentScriptResponse(message, sender, sendResponse) {
   if (message.selectTarget) {
-    selectTarget(message.target, message.selectNext);
+    selectTarget(message.target);
     sendResponse(true);
   }
   if (message.cancelSelectTarget) {
     endSelection(sender.tab.id);
     sendResponse(true);
+  }
+  if (message.selectNext) {
+    UiState.selectNextCommand();
   }
 }
 

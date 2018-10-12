@@ -25,6 +25,7 @@ class ModalState {
   @observable suiteSettingsState = {};
   @observable baseUrlState = {};
   @observable welcomeState = {
+    started: false,
     completed: false
   };
 
@@ -81,6 +82,7 @@ class ModalState {
         },
         cancel: () => {
           this.cancelRenaming();
+          if (!this.welcomeState.completed) this.showWelcome();
         }
       };
     });
@@ -188,14 +190,20 @@ class ModalState {
     });
   }
 
+  @action.bound showWelcome() {
+    this.welcomeState = { started: false, completed: false };
+  }
+
+  @action.bound hideWelcome() {
+    this.welcomeState = { started: true, completed: false };
+  }
+
   @action.bound completeWelcome() {
-    this.welcomeState = { completed: true };
+    this.welcomeState = { started: true, completed: true };
   }
 
   @action.bound renameProject() {
-    this.rename(Types.project, this._project.name).then(name => {
-      this._project.changeName(name);
-    });
+    return this.rename(Types.project, this._project.name);
   }
 }
 

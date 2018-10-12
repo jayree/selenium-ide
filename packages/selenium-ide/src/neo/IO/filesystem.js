@@ -65,7 +65,6 @@ export function loadAsText(blob) {
 }
 
 export function saveProject(_project) {
-  if (_project.name === "Untitled Project") return ModalState.renameProject();
   const project = _project.toJS();
   downloadProject(project);
   UiState.saved();
