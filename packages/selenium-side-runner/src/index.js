@@ -227,8 +227,9 @@ function runJest(project) {
     const args = [
       "--testMatch", `{**/*${program.filter}*/*.test.js,**/*${program.filter}*.test.js}`
     ].concat(program.maxWorkers ? ["-w", program.maxWorkers] : [])
-      .concat(program.outputDirectory ? ["--json", "--outputFile", path.join(program.outputDirectory, `${project.name}.json`)] : []);
-    const opts = {
+      .concat(program.outputDirectory ? ["--json", "--outputFile", path.isAbsolute(program.outputDirectory) ? path.join(program.outputDirectory, `${project.name}.json`) : path.join('..', program.outputDirectory, `${project.name}.json`)] : []);
+      //fs.closeSync(fs.openSync(path.join(process.cwd(), program.outputDirectory, `${project.name}.json`), 'w'));
+      const opts = {
       cwd: path.join(process.cwd(), projectPath),
       stdio: "inherit"
     };

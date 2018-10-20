@@ -9,6 +9,11 @@
             "problemMatcher": [
                 "$node-sass"
             ]
+        },
+        {
+            "type": "npm",
+            "script": "pack:runner",
+            "problemMatcher": []
         }
     ]
 }
