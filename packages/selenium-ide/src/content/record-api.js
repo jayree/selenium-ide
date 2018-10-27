@@ -16,6 +16,7 @@
  */
 
 import browser from "webextension-polyfill";
+import { calculateFrameIndex } from "./utils";
 
 let contentSideexTabId = -1;
 let frameLocation = "";
@@ -108,12 +109,21 @@ function detachRecorderHandler(message, sender, sendResponse) {
   }
 }
 
+// recorder event handlers
+browser.runtime.onMessage.addListener(attachRecorderHandler);
+browser.runtime.onMessage.addListener(detachRecorderHandler);
+
 function findRecordingIndicator() {
-  return document.getElementById("selenium-ide-indicator");
+  try {
+    return document.getElementById("selenium-ide-indicator");
+  } catch(error) {
+    return true;
+  }
 }
 
 function addRecordingIndicator() {
   if (!findRecordingIndicator() && frameLocation === "root") {
+    browser.runtime.sendMessage({ setFrameNumberForTab: true, length: window.parent.frames.length });
     let recordingIndicator = window.document.createElement("iframe");
     recordingIndicator.src = browser.runtime.getURL("/indicator.html");
     recordingIndicator.id = "selenium-ide-indicator";
@@ -155,34 +165,41 @@ function removeRecordingIndicator() {
   }
 }
 
-// recorder event handlers
-browser.runtime.onMessage.addListener(attachRecorderHandler);
-browser.runtime.onMessage.addListener(detachRecorderHandler);
-
+// TODO: Decouple frame location from recording since its also used in playback
+// and not obvious that that's happening (a.k.a. MAGIC!).
 // set frame id
-(function getframeLocation() {
+(async function getframeLocation() {
   let currentWindow = window;
   let currentParentWindow;
+  let recordingIndicator;
+  let recordingIndicatorIndex;
+
   while (currentWindow !== window.top) {
     currentParentWindow = currentWindow.parent;
     if (!currentParentWindow.frames.length) {
       break;
     }
 
-    let indicator;
     try {
-      indicator = currentParentWindow.document.getElementById("selenium-ide-indicator");
+      recordingIndicator = currentParentWindow.document.getElementById("selenium-ide-indicator");
     } catch(e) {
-      indicator = true;
+      // If we got here looking for the indicator, its likely that we found it
+      // but hit a CORS restriction. So we assume that's the case and set the
+      // indicator variable to true.
+      recordingIndicator = true;
     }
 
+    if (recordingIndicator) {
+      recordingIndicatorIndex = await browser.runtime.sendMessage({
+        requestFrameIndex: true
+      });
+    }
 
     for (let idx = 0; idx < currentParentWindow.frames.length; idx++) {
       const frame = currentParentWindow.frames[idx];
 
       if (frame === currentWindow) {
-        const index = (indicator && idx !== 0) ? idx - 1 : idx;
-        frameLocation = ":" + index + frameLocation;
+        frameLocation = ":" + calculateFrameIndex(recordingIndicatorIndex, idx) + frameLocation;
         currentWindow = currentParentWindow;
         break;
       }

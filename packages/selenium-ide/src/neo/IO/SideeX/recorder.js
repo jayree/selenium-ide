@@ -247,6 +247,12 @@ export default class BackgroundRecorder {
   }
 
   addCommandMessageHandler(message, sender, sendResponse) {
+    if (message.requestFrameIndex) {
+      return sendResponse(this.windowSession.frameCountForTab[sender.tab.id]);
+    } else if (message.setFrameNumberForTab) {
+      this.windowSession.frameCountForTab[sender.tab.id] = message.length;
+      return sendResponse(true);
+    }
     if (!message.command || this.windowSession.openedWindowIds[sender.tab.windowId] == undefined) {
       return;
     }
@@ -439,4 +445,5 @@ export default class BackgroundRecorder {
     let testCaseId = getSelectedCase().id;
     return this.windowSession.openedTabIds[testCaseId] && Object.keys(this.windowSession.openedTabIds[testCaseId]).includes(`${tabId}`);
   }
+
 }

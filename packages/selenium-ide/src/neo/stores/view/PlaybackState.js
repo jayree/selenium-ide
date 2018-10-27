@@ -66,6 +66,8 @@ class PlaybackState {
     this.logger = new Logger(Channels.PLAYBACK);
     this.lastSelectedView = undefined;
     this.filteredTests = [];
+    this.failureMessages = [];
+    this.failedTests = [];
 
     this.extCommand = new ExtCommand(WindowSession);
     this.browserDriver = new WebDriverExecutor();
@@ -376,6 +378,7 @@ class PlaybackState {
                   this.logger.error(result.message);
                   this.forceFailure();
                   if (!this.hasFinishedSuccessfully) {
+                    this.failureMessages.push(result.message);
                     this.failures++;
                   }
                 }
@@ -438,6 +441,7 @@ class PlaybackState {
     if (!this.noStatisticsEffects) {
       this.finishedTestsCount++;
       if (!this.hasFinishedSuccessfully) {
+        this.failedTests.push(this.currentRunningTest.name);
         this.failures++;
       }
     }
@@ -481,6 +485,7 @@ class PlaybackState {
 
   @action.bound setCommandState(commandId, state, message) {
     if (!this.pauseOnExceptions && (state === PlaybackStates.Failed || state === PlaybackStates.Fatal)) {
+      if (message) this.failureMessages.push(message);
       this.errors++;
     }
     if (this.isPlaying) {
