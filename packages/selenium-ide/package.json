@@ -1,6 +1,6 @@
 {
   "name": "selenium-ide-extension",
-  "version": "3.4.4",
+  "version": "3.5.0-alpha.0",
   "description": "An integrated development environment for Selenium scripts",
   "license": "Apache-2.0",
   "private": true,
@@ -29,9 +29,11 @@
     "closure-loader": "0.6.0",
     "copy-webpack-plugin": "^4.0.1",
     "css-loader": "^0.28.7",
+    "dom-testing-library": "^3.12.0",
     "exports-loader": "^0.6.4",
     "extract-text-webpack-plugin": "^3.0.0",
     "file-loader": "^0.11.2",
+    "fuse.js": "^3.3.0",
     "google-closure-library": "^20170521.0.0",
     "html-webpack-plugin": "^2.30.1",
     "imports-loader": "^0.7.1",
@@ -49,7 +51,7 @@
     "webpack-dev-server": "^2.8.2"
   },
   "dependencies": {
-    "browser-webdriver": "^3.4.0",
+    "browser-webdriver": "^3.5.0-alpha.0",
     "classnames": "^2.2.5",
     "js-beautify": "^1.7.5",
     "mobx": "^3.3.1",
@@ -74,7 +76,7 @@
     "react-tooltip": "^3.4.0",
     "react-transition-group": "^2.2.1",
     "scroll-into-view-if-needed": "2",
-    "selianize": "^3.4.2",
+    "selianize": "^3.5.0-alpha.0",
     "string-natural-compare": "^2.0.2",
     "styled-components": "^2.1.2",
     "ua-parser-js": "^0.7.17",

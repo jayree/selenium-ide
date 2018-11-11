@@ -16,14 +16,12 @@
 // under the License.
 
 import browser from 'webextension-polyfill'
-import parser from 'ua-parser-js'
 import Debugger, { convertLocator } from '../debugger'
 import PlaybackState from '../../stores/view/PlaybackState'
 import variables from '../../stores/view/Variables'
 import { absolutifyUrl } from '../playback/utils'
+import { userAgent as parsedUA } from '../../../common/utils'
 import './bootstrap'
-
-const parsedUA = parser(window.navigator.userAgent)
 
 export default class ExtCommand {
   constructor(windowSession) {
@@ -39,8 +37,7 @@ export default class ExtCommand {
     this.attached = false
 
     // Use ES6 arrow function to bind correct this
-    this.tabsOnUpdatedHandler = (tabId, changeInfo, _tabInfo) => {
-      // eslint-disable-line no-unused-vars
+    this.tabsOnUpdatedHandler = (tabId, changeInfo, tabInfo) => { // eslint-disable-line
       if (changeInfo.status) {
         if (changeInfo.status == 'loading') {
           this.setLoading(tabId)

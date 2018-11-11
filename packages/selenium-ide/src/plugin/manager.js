@@ -181,6 +181,7 @@ class PluginManager {
     }).then(res => res.message)
   }
 
+  // will return all responses including errors
   emitMessage(message, keepAliveCB) {
     if (this.plugins.length) {
       return Promise.all(
@@ -192,18 +193,24 @@ class PluginManager {
           }, TIMEOUT)
           return sendMessage(plugin.id, message)
             .catch(err => Promise.resolve(err))
-            .then(r => {
+            .then(response => {
               clearInterval(emitInterval)
               if (didReachTimeout) {
                 keepAliveCB(plugin, true)
               }
-              return r
+              return { plugin, response }
             })
         })
       )
     } else {
       return Promise.resolve([])
     }
+  }
+
+  // only returns successful responses
+  async emitMessageForResponse(message, keepAliveCB) {
+    const results = await this.emitMessage(message, keepAliveCB)
+    return results.filter(({ response }) => !(response instanceof Error))
   }
 }
 
