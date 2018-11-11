@@ -412,9 +412,7 @@ const projects = [
   return project
 })
 
-// eslint-disable-next-line no-unused-vars
-function handleQuit(signal, code) {
-  // eslint-disable-line no-unused-vars
+function handleQuit(_signal, code) {
   if (!program.run) {
     rimraf.sync(projectPath)
   }
