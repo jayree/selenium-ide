@@ -28,4 +28,3 @@ script:
   - yarn test:webdriver
   - yarn test:runner --server http://localhost:4444/wd/hub
   - EXT_PATH="/ext-build" SERVER="http://localhost:4444/wd/hub" yarn test:ext
-  
