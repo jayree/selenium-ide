@@ -95,7 +95,7 @@ export class WindowSession {
       this.currentUsedFrameLocation[identifier] = 'root'
       this.openedTabCount[identifier] = 1
       this.openedTabIds[identifier] = {
-        [tabs[0].id]: 'win_ser_local',
+        [tabs[0].id]: 'root',
       }
     }
   }
@@ -113,6 +113,12 @@ export class WindowSession {
 
   async focusIDEWindow() {
     await browser.windows.update(this.ideWindowId, {
+      focused: true,
+    })
+  }
+
+  async focusPlayingWindow() {
+    await browser.windows.update(this.generalUsePlayingWindowId, {
       focused: true,
     })
   }

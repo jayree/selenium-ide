@@ -43,6 +43,8 @@ class UiState {
   @observable
   isRecording = false
   @observable
+  lastRecordedCommand = null
+  @observable
   isSelectingTarget = false
   @observable
   windowHeight = window.innerHeight
@@ -103,6 +105,11 @@ class UiState {
   @action.bound
   setProject(project) {
     this._project = project
+  }
+
+  @computed
+  get project() {
+    return this._project
   }
 
   @computed
@@ -291,27 +298,35 @@ class UiState {
   }
 
   @action.bound
-  selectCommand(command) {
-    if (!PlaybackState.isPlaying || PlaybackState.paused) {
+  selectCommand(command, opts = { isCommandTarget: false }) {
+    if (
+      !PlaybackState.isPlaying ||
+      PlaybackState.paused ||
+      opts.isCommandTarget
+    ) {
       this.selectedCommand = command
     }
   }
 
   @action.bound
-  selectCommandByIndex(index) {
+  selectCommandByIndex(index, opts) {
     const test = this.displayedTest
     if (index >= 0 && index < test.commands.length) {
-      this.selectCommand(test.commands[index])
+      this.selectCommand(test.commands[index], opts)
     } else if (index === test.commands.length) {
-      this.selectCommand(this.pristineCommand)
+      this.selectCommand(this.pristineCommand, opts)
     }
   }
 
   @action.bound
-  selectNextCommand() {
-    this.selectCommandByIndex(
-      this.displayedTest.commands.indexOf(this.selectedCommand) + 1
-    )
+  selectNextCommand(opts = { from: undefined, isCommandTarget: false }) {
+    this.selectCommandByIndex(this.nextCommandIndex(opts.from), opts)
+  }
+
+  nextCommandIndex(targetCommand) {
+    const commands = this.displayedTest.commands
+    if (targetCommand) return commands.indexOf(targetCommand) + 1
+    else return commands.indexOf(this.selectedCommand) + 1
   }
 
   @action.bound
@@ -338,6 +353,7 @@ class UiState {
     try {
       await this.recorder.attach(startingUrl)
       this._setRecordingState(true)
+      this.lastRecordedCommand = null
       await this.emitRecordingState()
     } catch (err) {
       ModalState.showAlert({

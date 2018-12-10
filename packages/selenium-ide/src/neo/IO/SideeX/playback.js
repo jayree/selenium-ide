@@ -22,7 +22,7 @@ import { canExecuteCommand } from '../../../plugin/commandExecutor'
 import { createPlaybackTree } from '../../playback/playback-tree'
 import { ControlFlowCommandChecks } from '../../models/Command'
 import Logger from '../../stores/view/Logs'
-import { isProduction } from '../../../content/utils'
+import { isProduction } from '../../../common/utils'
 
 let baseUrl = ''
 let ignoreBreakpoint = false
@@ -138,7 +138,13 @@ function runNextCommand() {
     // paused
     if (isStopping()) return false
   }
+  // TODO: this is a hack, find a way to put this inside ext-command
   if (
+    !executor.isAlive() &&
+    PlaybackState.currentExecutingCommandNode.command.command !== 'selectWindow'
+  ) {
+    executor.throwAliveError()
+  } else if (
     PlaybackState.currentExecutingCommandNode.isWebDriverCommand(executor) ||
     PlaybackState.currentExecutingCommandNode.isExtCommand(executor)
   ) {
@@ -409,13 +415,13 @@ function doPluginCommand(commandNode, implicitTime, implicitCount) {
   const { id, target } = commandNode.command
   return PlaybackState.currentExecutingCommandNode
     .execute(executor, getPluginOptions(commandNode))
-    .then(result => {
+    .then(node => {
       PlaybackState.setCommandState(
         id,
-        result.status ? result.status : PlaybackStates.Passed,
-        (result && result.message) || undefined
+        node.result.status ? node.result.status : PlaybackStates.Passed,
+        (node.result && node.result.message) || undefined
       )
-      return result
+      return node
     })
     .catch(err => {
       if (isElementNotFound(err.message)) {

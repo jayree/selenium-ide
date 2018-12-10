@@ -67,11 +67,17 @@ export class CommandNode {
           'Max retry limit exceeded. To override it, specify a new limit in the value input field.',
       })
     }
-    return this._executeCommand(commandExecutor, options, targetOverride).then(
-      result => {
-        return this._executionResult(commandExecutor, result)
-      }
-    )
+    return commandExecutor.beforeCommand(this.command).then(() => {
+      return this._executeCommand(
+        commandExecutor,
+        options,
+        targetOverride
+      ).then(result => {
+        return commandExecutor.afterCommand(this.command).then(() => {
+          return this._executionResult(commandExecutor, result)
+        })
+      })
+    })
   }
 
   _interpolateTarget(target) {
@@ -97,7 +103,9 @@ export class CommandNode {
   }
 
   _executeCommand(commandExecutor, options, targetOverride) {
-    if (this.isControlFlow()) {
+    if (this.command.enabled && !Commands.list.get(this.command.command)) {
+      throw new Error(`Unknown command ${this.command.command}`)
+    } else if (this.isControlFlow()) {
       return this._evaluate(commandExecutor)
     } else if (this.isTerminal()) {
       return Promise.resolve({
@@ -159,7 +167,7 @@ export class CommandNode {
         next: this.command.command !== 'run' ? this.next : result,
       }
     } else if (canExecuteCommand(this.command.command)) {
-      return { next: this.next }
+      return { next: this.next, result }
     } else {
       if (this.command.command.match(/^verify/)) {
         return {
