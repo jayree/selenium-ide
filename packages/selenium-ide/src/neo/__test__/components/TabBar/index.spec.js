@@ -15,6 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+jest.mock('../../../IO/storage')
 import React from 'react'
 import { renderIntoDocument, fireEvent, cleanup } from 'react-testing-library'
 import TabBar from '../../../components/TabBar'

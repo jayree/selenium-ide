@@ -1,3 +1,16 @@
+## 3.5.8
+Improved recording indicator UI
+Improved recording of mouse over locators
+Enable saving projects with invalid file system characters
+Enable plugins to delete commands
+Fix for plugins to work with a suite of tests running in parallel in the runner
+## 3.5.7
+Fixed performance issue during recording that would cause the browser window to become unresponsive.
+## 3.5.6
+Added indication when selecting an element.  
+Added a new xpath locator strategy.  
+Base URL will resolve relatively if the target URL doesn't start with a `/`.  
+Fixed an issue where send keys ${KEY_ENTER} may not always work.  
 ## 3.2.0
 ### SIDE Runner
 Can now run project files [headlessly in command line](https://www.npmjs.com/package/selenium-side-runner)

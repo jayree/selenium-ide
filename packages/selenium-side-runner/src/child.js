@@ -1,3 +1,5 @@
-import jest from 'jest'
+if (process.env.NODE_ENV == null) {
+  process.env.NODE_ENV = 'test'
+}
 
-jest.run(process.argv.slice(2))
+require('jest-cli/build/cli').run()

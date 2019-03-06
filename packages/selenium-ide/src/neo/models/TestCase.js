@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { action, observable } from 'mobx'
+import { action, observable, reaction } from 'mobx'
 import uuidv4 from 'uuid/v4'
 import Command from './Command'
 
@@ -26,16 +26,50 @@ export default class TestCase {
   @observable
   commands = []
   nameDialogShown = false
+  @observable
+  modified = false
+  @observable
+  selectedCommand = null
+  @observable
+  scrollY = null
 
   constructor(id = uuidv4(), name = 'Untitled Test') {
     this.id = id
     this.name = name
+    this.changeDisposer = reaction(
+      () =>
+        this.commands.map(({ command, target, targets, value }) => ({
+          command,
+          target,
+          targets,
+          value,
+        })),
+      () => {
+        this.modified = true
+      }
+    )
     this.export = this.export.bind(this)
+    this.dispose = this.dispose.bind(this)
+  }
+
+  @action.bound
+  updateWindowHandleNames(oldValue, newValue) {
+    const commands = this.commands
+    commands.forEach(function(kommand) {
+      kommand.target = kommand.target
+        .split(`\${${oldValue}}`)
+        .join(`\${${newValue}}`)
+      kommand.value = kommand.value
+        .split(`\${${oldValue}}`)
+        .join(`\${${newValue}}`)
+    })
+    this.commands = commands
   }
 
   @action.bound
   setName(name) {
     this.name = name
+    this.modified = true
   }
 
   @action.bound
@@ -48,6 +82,10 @@ export default class TestCase {
       )
     } else {
       const command = new Command(undefined, c, t, v)
+      command.addListener(
+        'window-handle-name-changed',
+        this.updateWindowHandleNames
+      )
       if (comment) command.setComment(comment)
       index !== undefined
         ? this.commands.splice(index, 0, command)
@@ -65,6 +103,10 @@ export default class TestCase {
         }`
       )
     } else {
+      command.addListener(
+        'window-handle-name-changed',
+        this.updateWindowHandleNames
+      )
       this.commands.push(command)
     }
   }
@@ -96,6 +138,10 @@ export default class TestCase {
 
   @action.bound
   removeCommand(command) {
+    command.removeListener(
+      'window-handle-name-changed',
+      this.updateWindowHandleNames
+    )
     this.commands.remove(command)
   }
 
@@ -110,6 +156,10 @@ export default class TestCase {
       name: this.name,
       commands: this.commands.map(c => c.export()),
     }
+  }
+
+  dispose() {
+    this.changeDisposer()
   }
 
   @action

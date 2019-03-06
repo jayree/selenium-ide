@@ -32,6 +32,7 @@ import Capabilities from './capabilities'
 import ParseProxy from './proxy'
 import Config from './config'
 import Satisfies from './versioner'
+import parseModulePath from './module-path'
 import metadata from '../package.json'
 
 const DEFAULT_TIMEOUT = 15000
@@ -63,7 +64,7 @@ program
     'Proxy options to pass, for use with manual, pac and socks proxies'
   )
   .option(
-    '--configuration-file [filepath]',
+    '--config, --config-file, --configuration-file [filepath]',
     'Use specified YAML file for configuration. (default: .side.yml)'
   )
   .option(
@@ -112,14 +113,14 @@ const configuration = {
   path: path.join(__dirname, '../../'),
 }
 
-const confPath = program.configurationFile || '.side.yml'
-const configurationFilePath = path.isAbsolute(confPath)
+const confPath = program.configFile || '.side.yml'
+const configFilePath = path.isAbsolute(confPath)
   ? confPath
   : path.join(process.cwd(), confPath)
 try {
-  Object.assign(configuration, Config.load(configurationFilePath))
+  Object.assign(configuration, Config.load(configFilePath))
 } catch (e) {
-  winston.debug('Could not load ' + configurationFilePath)
+  winston.debug('Could not load ' + configFilePath)
 }
 
 program.filter = program.filter || '*'
@@ -206,20 +207,24 @@ function runProject(project) {
       )
     )
   }
-  projectPath = `side-suite-${project.name}`
+  projectPath = `side-suite-${sanitizeFileName(project.name)}`
   rimraf.sync(projectPath)
   fs.mkdirSync(projectPath)
   fs.writeFileSync(
     path.join(projectPath, 'package.json'),
     JSON.stringify(
       {
-        name: project.name,
+        name: sanitizeFileName(project.name),
         version: '0.0.0',
         jest: {
-          modulePaths: [path.join(__dirname, '../node_modules')],
-          setupTestFrameworkScriptFile: require.resolve(
-            'jest-environment-selenium/dist/setup.js'
-          ),
+          extraGlobals:
+            project.jest && project.jest.extraGlobals
+              ? project.jest.extraGlobals
+              : [],
+          modulePaths: parseModulePath(path.join(__dirname, '../node_modules')),
+          setupFilesAfterEnv: [
+            require.resolve('jest-environment-selenium/dist/setup.js'),
+          ],
           testEnvironment: 'jest-environment-selenium',
           testEnvironmentOptions: configuration,
         },
@@ -246,17 +251,21 @@ function runProject(project) {
             ? ''
             : 'beforeEach(() => {vars = {};});afterEach(async () => (cleanup()));'
           writeJSFile(
-            path.join(projectPath, suite.name),
+            path.join(projectPath, sanitizeFileName(suite.name)),
             `// This file was generated using Selenium IDE\nconst tests = require("./commons.js");${
               code.globalConfig
             }${suite.code}${cleanup}`
           )
         } else if (suite.tests.length) {
-          fs.mkdirSync(path.join(projectPath, suite.name))
+          fs.mkdirSync(path.join(projectPath, sanitizeFileName(suite.name)))
           // parallel suite
           suite.tests.forEach(test => {
             writeJSFile(
-              path.join(projectPath, suite.name, test.name),
+              path.join(
+                projectPath,
+                sanitizeFileName(suite.name),
+                sanitizeFileName(test.name)
+              ),
               `// This file was generated using Selenium IDE\nconst tests = require("../commons.js");${
                 code.globalConfig
               }${test.code}`
@@ -303,6 +312,7 @@ function runProject(project) {
 function runJest(project) {
   return new Promise((resolve, reject) => {
     const args = [
+      '--no-watchman',
       '--testMatch',
       `{**/*${program.filter}*/*.test.js,**/*${program.filter}*.test.js}`,
     ]
@@ -358,6 +368,10 @@ function runAll(projects, index = 0) {
 
 function writeJSFile(name, data, postfix = '.test.js') {
   fs.writeFileSync(`${name}${postfix}`, beautify(data, { indent_size: 2 }))
+}
+
+function sanitizeFileName(name) {
+  return name.replace(/([^a-z0-9 ._-]+)/gi, '')
 }
 
 const projects = [

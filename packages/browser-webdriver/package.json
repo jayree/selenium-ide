@@ -1,13 +1,13 @@
 {
   "name": "browser-webdriver",
-  "version": "3.5.0-beta.0",
+  "version": "3.5.9",
   "main": "build/webdriver.js",
   "repository": "https://github.com/SeleniumHQ/selenium-ide",
   "license": "Apache-2.0",
   "private": true,
   "scripts": {
     "build": "yarn run browserify src/index.js -s browser-webdriver -o build/webdriver.js",
-    "build:dev": "yarn run watchify src/index.js -s browser-webdriver -o build/webdriver.js"
+    "watch": "yarn run watchify src/index.js -s browser-webdriver -o build/webdriver.js"
   },
   "files": [
     "build/webdriver.js"

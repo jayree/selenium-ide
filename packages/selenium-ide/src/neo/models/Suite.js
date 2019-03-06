@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { action, observable, computed } from 'mobx'
+import { action, observable, computed, reaction } from 'mobx'
 import uuidv4 from 'uuid/v4'
 import naturalCompare from 'string-natural-compare'
 import TestCase from './TestCase'
@@ -34,10 +34,20 @@ export default class Suite {
   persistSession = false
   @observable
   _tests = []
+  @observable
+  modified = false
+  @observable
+  isOpen = false
 
   constructor(id = uuidv4(), name = 'Untitled Suite') {
     this.id = id
     this.name = name
+    this.changeTestsDisposer = reaction(
+      () => this._tests.length,
+      () => {
+        this.modified = true
+      }
+    )
     this.containsTest = this.containsTest.bind(this)
     this.export = this.export.bind(this)
   }
@@ -45,7 +55,7 @@ export default class Suite {
   @computed
   get tests() {
     return this.isParallel
-      ? this._tests.sort((t1, t2) => naturalCompare(t1.name, t2.name))
+      ? this._tests.slice().sort((t1, t2) => naturalCompare(t1.name, t2.name))
       : this._tests
   }
 
@@ -56,6 +66,7 @@ export default class Suite {
   @action.bound
   setName(name) {
     this.name = name
+    this.modified = true
   }
 
   @action.bound
@@ -85,6 +96,11 @@ export default class Suite {
     if (!this.isParallel) {
       this.persistSession = persistSession
     }
+  }
+
+  @action.bound
+  setOpen(isOpen) {
+    this.isOpen = isOpen
   }
 
   containsTest(test) {

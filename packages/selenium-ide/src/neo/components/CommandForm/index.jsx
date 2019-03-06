@@ -24,13 +24,14 @@ import Input from '../FormInput'
 import TextArea from '../FormTextArea'
 import CommandInput from '../CommandInput'
 import TargetInput from '../TargetInput'
-import NewWindowInput from '../NewWindowInput'
 import FlatButton from '../FlatButton'
+import InfoBadge from '../InfoBadge'
 import { find, select } from '../../IO/SideeX/find-select'
 import ModalState from '../../stores/view/ModalState'
 import UiState from '../../stores/view/UiState'
 import PlaybackState from '../../stores/view/PlaybackState'
 import './style.css'
+
 @observer
 export default class CommandForm extends React.Component {
   constructor(props) {
@@ -112,6 +113,40 @@ export default class CommandForm extends React.Component {
                 this.props.command ? this.props.command.toggleEnabled : null
               }
             />
+            <FlatButton
+              data-tip={
+                this.props.command && this.props.command.opensWindow
+                  ? '<p>Modify new window configuration</p>'
+                  : '<p>Add new window configuration</p>'
+              }
+              className={classNames(
+                'new-window-button',
+                'icon',
+                'si-open-tab',
+                {
+                  active: this.props.command && this.props.command.opensWindow,
+                }
+              )}
+              disabled={
+                !this.props.command ||
+                (this.props.command && !this.props.command.command) ||
+                PlaybackState.isPlaying
+              }
+              onClick={() => {
+                ModalState.toggleNewWindowConfiguration()
+                this.props.command
+                  ? this.props.command.toggleOpensWindowRead()
+                  : undefined
+              }}
+            >
+              {this.props.command &&
+              (this.props.command.opensWindow &&
+                !this.props.command.opensWindowRead) ? (
+                <InfoBadge />
+              ) : (
+                undefined
+              )}
+            </FlatButton>
           </div>
           <div className="target">
             <TargetInput
@@ -166,14 +201,6 @@ export default class CommandForm extends React.Component {
             disabled={!this.props.command}
             onChange={this.props.command ? this.props.command.setComment : null}
           />
-          <div className="target">
-            <NewWindowInput
-              id="new-window"
-              name="new-window"
-              label="Opens Window"
-              command={this.props.command}
-            />
-          </div>
           <input tabIndex="-1" type="submit" onClick={this.props.onSubmit} />
         </form>
       </div>

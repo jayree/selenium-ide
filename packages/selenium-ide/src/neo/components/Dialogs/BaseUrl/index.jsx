@@ -26,6 +26,7 @@ export default class BaseUrlDialog extends React.Component {
   static propTypes = {
     isSelectingUrl: PropTypes.bool,
     isInvalid: PropTypes.bool,
+    confirmLabel: PropTypes.string,
   }
   render() {
     return (
@@ -63,8 +64,13 @@ class BaseUrlDialogContents extends React.Component {
         }
         type={this.props.isInvalid ? 'warn' : 'info'}
         renderFooter={() => (
-          <div className="right">
-            <FlatButton onClick={this.props.cancel}>Cancel</FlatButton>
+          <div
+            className="right"
+            style={{
+              display: 'flex',
+            }}
+          >
+            <FlatButton onClick={this.props.cancel}>cancel</FlatButton>
             <FlatButton
               type="submit"
               disabled={!this.urlRegex.test(this.state.url)}
@@ -72,7 +78,7 @@ class BaseUrlDialogContents extends React.Component {
                 this.props.onUrlSelection(this.state.url)
               }}
             >
-              Start recording
+              {this.props.confirmLabel || 'confirm'}
             </FlatButton>
           </div>
         )}

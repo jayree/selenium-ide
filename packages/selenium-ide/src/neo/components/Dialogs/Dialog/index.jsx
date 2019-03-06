@@ -19,12 +19,10 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import classNames from 'classnames'
 import RemoveButton from '../../ActionButtons/Remove'
-import info from '../../../assets/images/tick.png'
 import warn from '../../../assets/images/warning.png'
 import './style.css'
 
 const images = {
-  info,
   warn,
 }
 
@@ -39,9 +37,27 @@ export default class DialogContainer extends React.Component {
     renderFooter: PropTypes.func,
     onRequestClose: PropTypes.func,
   }
+  static defaultProps = {
+    type: 'info',
+  }
+  handleKeyDown(event) {
+    event.persist()
+    if (event.target.key === 'Escape') {
+      event.stopPropagation()
+      this.props.onRequestClose()
+    }
+  }
   render() {
+    const coverImage = this.props.renderImage ? (
+      this.props.renderImage()
+    ) : images[this.props.type] ? (
+      <img height="30" src={images[this.props.type]} />
+    ) : (
+      undefined
+    )
     return (
       <div
+        onKeyDown={this.handleKeyDown.bind(this)}
         className={classNames(
           'dialog',
           `dialog--${this.props.type}`,
@@ -49,13 +65,9 @@ export default class DialogContainer extends React.Component {
         )}
       >
         <div className="dialog__header">
-          <div className="dialog__cover-image">
-            {this.props.renderImage ? (
-              this.props.renderImage()
-            ) : (
-              <img height="30" src={images[this.props.type]} />
-            )}
-          </div>
+          {coverImage && (
+            <div className="dialog__cover-image">{coverImage}</div>
+          )}
           <div className="dialog__title">
             {this.props.renderTitle ? (
               this.props.renderTitle()
@@ -63,17 +75,19 @@ export default class DialogContainer extends React.Component {
               <h2>{this.props.title}</h2>
             )}
           </div>
-          <RemoveButton
-            onClick={
-              this.props.onRequestClose ? this.props.onRequestClose : null
-            }
-            style={{
-              color: 'white',
-              position: 'absolute',
-              top: 0,
-              right: 0,
-            }}
-          />
+          {this.props.onRequestClose && (
+            <RemoveButton
+              onClick={
+                this.props.onRequestClose ? this.props.onRequestClose : null
+              }
+              style={{
+                color: 'white',
+                position: 'absolute',
+                top: 0,
+                right: 0,
+              }}
+            />
+          )}
         </div>
         <div className="dialog__contents">
           <form
@@ -81,7 +95,7 @@ export default class DialogContainer extends React.Component {
               e.preventDefault()
             }}
           >
-            <div>{this.props.children}</div>
+            <div className="dialog__main">{this.props.children}</div>
             {this.props.renderFooter ? (
               <div className="dialog__footer">{this.props.renderFooter()}</div>
             ) : null}

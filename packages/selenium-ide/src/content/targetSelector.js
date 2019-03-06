@@ -47,6 +47,43 @@ class TargetSelector {
     this.div = div
     this.e = null
     this.r = null
+    this.banner = doc.createElement('div')
+    this.banner.setAttribute(
+      'style',
+      'position: fixed;top: 0;left: 0;bottom: 0;right: 0;background: trasparent;z-index: 10000;'
+    )
+    const header = doc.createElement('div')
+    header.setAttribute(
+      'style',
+      "pointer-events: none;display: flex;align-items: center;justify-content: center;flex-direction: row;position: fixed;top: 20%;left: 50%;transform: translateX(-50%);background: #f7f7f7;color: #114990;font-size: 22px;font-weight: 200;z-index: 10001;font-family: system, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;box-shadow: 0 7px 10px 0 rgba(0,0,0,0.1);border: 1px black solid; border-radius: 50px;padding: 10px;"
+    )
+    const img = doc.createElement('img')
+    img.src = browser.runtime.getURL('/icons/icon_light128.png')
+    img.setAttribute('style', 'width: 28px;margin: 0 10px;')
+    header.appendChild(img)
+    const span = doc.createElement('span')
+    span.setAttribute(
+      'style',
+      'border-left: 1px solid #c6c6c6;padding: 3px 10px;'
+    )
+    span.innerText = 'Select an element'
+    header.appendChild(span)
+    setTimeout(() => {
+      // this has to happen after a timeout, since adding it sync will add the event
+      // before the window is focused which will case mousemove to fire before the
+      // user actually moves the mouse
+      this.banner.addEventListener(
+        'mousemove',
+        () => {
+          setTimeout(() => {
+            this.banner.style.visibility = 'hidden'
+          }, 300)
+        },
+        false
+      )
+    }, 300)
+    this.banner.appendChild(header)
+    doc.body.insertBefore(this.banner, div)
     doc.addEventListener('mousemove', this, true)
     doc.addEventListener('click', this, true)
   }
@@ -58,6 +95,12 @@ class TargetSelector {
           this.div.parentNode.removeChild(this.div)
         }
         this.div = null
+      }
+      if (this.header) {
+        if (this.header.parentNode) {
+          this.header.parentNode.removeChild(this.header)
+        }
+        this.header = null
       }
       if (this.win) {
         const doc = this.win.document
@@ -101,7 +144,7 @@ class TargetSelector {
   }
 
   highlightElement(element) {
-    if (element && element != this.e) {
+    if (element && element != this.e && element !== this.banner) {
       this.e = element
     } else {
       return
@@ -120,7 +163,7 @@ class TargetSelector {
       }
       this.r = r
       const style =
-        'pointer-events: none; position: absolute; background-color: rgb(78, 171, 230); opacity: 0.4; border: 1px solid #0e0e0e; z-index: 100;'
+        'pointer-events: none; position: absolute; background-color: rgb(78, 171, 230); opacity: 0.4; border: 1px solid #0e0e0e; z-index: 1000000;'
       const pos = `top:${r.top + this.win.scrollY}px; left:${r.left +
         this.win.scrollX}px; width:${r.width}px; height:${r.height}px;`
       this.div.setAttribute('style', style + pos)

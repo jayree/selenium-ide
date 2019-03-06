@@ -132,9 +132,11 @@ class TestRow extends React.Component {
     onContextMenu: PropTypes.func,
     setContextMenu: PropTypes.func,
     level: PropTypes.number,
+    scrollToLastPos: PropTypes.func,
   }
   componentDidMount() {
     if (this.props.selected) {
+      this.props.scrollToLastPos()
       this.props.setSectionFocus('editor', () => {
         this.node.focus()
       })
@@ -233,22 +235,19 @@ class TestRow extends React.Component {
       this.props.remove(this.props.index, this.props.command)
     }
   }
-  clearAll() {
+  async clearAll() {
     if (!this.props.readOnly) {
-      ModalState.showAlert(
-        {
-          title: 'Clear all test commands',
-          description:
-            "You're about to remove all of the commands in this test. Do you want to proceed?",
-          confirmLabel: 'Clear all commands',
-          cancelLabel: 'Cancel',
-        },
-        choseProceed => {
-          if (choseProceed) {
-            this.props.clearAllCommands()
-          }
-        }
-      )
+      const choseProceed = await ModalState.showAlert({
+        title: 'Clear all test commands',
+        description:
+          "You're about to remove all of the commands in this test. Do you want to proceed?",
+        confirmLabel: 'clear all commands',
+        cancelLabel: 'cancel',
+      })
+      if (choseProceed) {
+        this.props.clearAllCommands()
+        this.props.moveSelection(0)
+      }
     }
   }
   render() {
@@ -317,6 +316,15 @@ class TestRow extends React.Component {
             }}
           >
             Record from here
+          </ListMenuItem>
+          <ListMenuItem
+            onClick={() => {
+              this.props.startPlayingHere(this.props.command, {
+                playFromHere: true,
+              })
+            }}
+          >
+            Play from here
           </ListMenuItem>
           {this.props.isSingleCommandExecutionEnabled && (
             <ListMenuItem

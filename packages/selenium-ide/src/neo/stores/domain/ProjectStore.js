@@ -15,12 +15,11 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import { action, observable, computed, toJS } from 'mobx'
+import { action, observable, computed, reaction, toJS } from 'mobx'
 import uuidv4 from 'uuid/v4'
 import naturalCompare from 'string-natural-compare'
 import TestCase from '../../models/TestCase'
 import Suite from '../../models/Suite'
-import modify from '../../side-effects/modify'
 import { VERSIONS } from '../../IO/migrate'
 
 export default class ProjectStore {
@@ -45,35 +44,63 @@ export default class ProjectStore {
 
   constructor(name = 'Untitled Project') {
     this.name = name
-    modify(this)
+    this.changedTestDisposer = reaction(
+      () => this._tests.find(({ modified }) => modified),
+      modified => {
+        if (modified) this.setModified(true)
+      }
+    )
+    this.changeTestsDisposer = reaction(
+      () => this._tests.length,
+      () => this.setModified(true)
+    )
+    this.changedSuiteDisposer = reaction(
+      () => this._suites.find(({ modified }) => modified),
+      modified => {
+        if (modified) this.setModified(true)
+      }
+    )
+    this.changeSuitesDisposer = reaction(
+      () => this._suites.length,
+      () => this.setModified(true)
+    )
     this.toJS = this.toJS.bind(this)
+    this.dispose = this.dispose.bind(this)
   }
 
   @computed
   get suites() {
-    return this._suites.sort((s1, s2) => naturalCompare(s1.name, s2.name))
+    return this._suites
+      .slice()
+      .sort((s1, s2) => naturalCompare(s1.name, s2.name))
   }
 
   @computed
   get tests() {
-    return this._tests.sort((t1, t2) => naturalCompare(t1.name, t2.name))
+    return this._tests
+      .slice()
+      .sort((t1, t2) => naturalCompare(t1.name, t2.name))
   }
 
   @computed
   get urls() {
-    return this._urls.sort()
+    return this._urls.slice().sort()
   }
 
   @action.bound
   setUrl(url) {
     this.url = url
+    this.setModified(true)
   }
 
   @action.bound
   addUrl(urlToAdd) {
     if (urlToAdd) {
       const url = new URL(urlToAdd).href
-      if (!this._urls.find(u => u === url)) this._urls.push(url)
+      if (!this._urls.find(u => u === url)) {
+        this._urls.push(url)
+        this.setModified(true)
+      }
     }
   }
 
@@ -85,14 +112,12 @@ export default class ProjectStore {
   @action.bound
   changeName(name) {
     this.name = name.replace(/<[^>]*>/g, '') // firefox adds unencoded html elements to the string, strip them
+    this.setModified(true)
   }
 
   @action.bound
   setModified(modified = true) {
     this.modified = modified
-    if (!modified) {
-      modify(this)
-    }
   }
 
   @action.bound
@@ -180,6 +205,17 @@ export default class ProjectStore {
   }
 
   @action.bound
+  saved() {
+    this._tests.forEach(test => {
+      test.modified = false
+    })
+    this._suites.forEach(test => {
+      test.modified = false
+    })
+    this.setModified(false)
+  }
+
+  @action.bound
   fromJS(jsRep) {
     this.name = jsRep.name
     this.setUrl(jsRep.url)
@@ -194,7 +230,14 @@ export default class ProjectStore {
     this.plugins.replace(jsRep.plugins)
     this.version = jsRep.version
     this.id = jsRep.id || uuidv4()
-    this.setModified(false)
+    this.saved()
+  }
+
+  dispose() {
+    this.changeTestsDisposer()
+    this.changedTestDisposer()
+    this.changeSuitesDisposer()
+    this.changedSuiteDisposer()
   }
 
   toJS() {

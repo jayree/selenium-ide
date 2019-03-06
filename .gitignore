@@ -17,3 +17,8 @@ tests/webdriver/
 tests/static/webdriver.js
 .*.swp
 .vscode
+website/i18n
+
+# auto-generated docs
+docs/api/arguments.md
+docs/api/commands.md

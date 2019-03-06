@@ -24,8 +24,8 @@ import classNames from 'classnames'
 import UiState from '../../stores/view/UiState'
 import PlaybackState from '../../stores/view/PlaybackState'
 import TestRow from '../TestRow'
-import './style.css'
 import { deriveCommandLevels } from '../../playback/playback-tree/command-leveler'
+import './style.css'
 
 @observer
 export default class TestTable extends React.Component {
@@ -34,11 +34,14 @@ export default class TestTable extends React.Component {
     this.newCommand = {}
     this.detectNewCommand = this.detectNewCommand.bind(this)
     this.disposeNewCommand = this.disposeNewCommand.bind(this)
+    this.handleScroll = this.handleScroll.bind(this)
+    this.scrollToLastPos = this.scrollToLastPos.bind(this)
     this.newObserverDisposer = observe(
       this.props.commands,
       this.detectNewCommand
     )
     this.commandLevels = []
+    this.node = null
   }
   static propTypes = {
     commands: MobxPropTypes.arrayOrObservableArray,
@@ -56,6 +59,13 @@ export default class TestTable extends React.Component {
   disposeNewCommand() {
     this.newCommand = undefined
   }
+  scrollToLastPos() {
+    if (UiState.selectedTest.test.scrollY) {
+      this.node.scrollTop = UiState.selectedTest.test.scrollY
+    } else {
+      this.node.scrollTop = 0
+    }
+  }
   componentDidUpdate(prevProps) {
     if (prevProps.commands !== this.props.commands) {
       this.newObserverDisposer()
@@ -66,6 +76,9 @@ export default class TestTable extends React.Component {
         )
       }
     }
+  }
+  handleScroll() {
+    UiState.selectedTest.test.scrollY = this.node.scrollTop
   }
   render() {
     if (this.props.commands)
@@ -89,6 +102,10 @@ export default class TestTable extends React.Component {
         </table>
       </div>,
       <div
+        onScroll={this.handleScroll}
+        ref={node => {
+          return (this.node = node || this.node)
+        }}
         key="body"
         className={classNames(
           'test-table',
@@ -125,6 +142,7 @@ export default class TestTable extends React.Component {
                           ? this.disposeNewCommand
                           : undefined
                       }
+                      scrollToLastPos={this.scrollToLastPos}
                       isPristine={false}
                       select={this.props.selectCommand}
                       startPlayingHere={PlaybackState.startPlaying}
@@ -149,6 +167,7 @@ export default class TestTable extends React.Component {
                       }
                       index={this.props.commands.length}
                       command={UiState.pristineCommand}
+                      scrollToLastPos={this.scrollToLastPos}
                       isPristine={true}
                       select={this.props.selectCommand}
                       addCommand={this.props.addCommand}

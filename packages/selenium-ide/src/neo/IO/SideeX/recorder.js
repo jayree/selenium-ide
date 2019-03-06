@@ -45,6 +45,7 @@ export default class BackgroundRecorder {
     this.rebind()
     if (browser && browser.runtime && browser.runtime.onMessage) {
       browser.runtime.onMessage.addListener(this.attachRecorderRequestHandler)
+      browser.runtime.onMessage.addListener(this.frameCountHandler)
     }
   }
 
@@ -304,10 +305,10 @@ export default class BackgroundRecorder {
   }
 
   addCommandMessageHandler(message, sender, sendResponse) {
-    if (message.requestFrameIndex) {
-      return sendResponse(this.windowSession.frameCountForTab[sender.tab.id])
-    } else if (message.setFrameNumberForTab) {
-      this.windowSession.frameCountForTab[sender.tab.id] = message.length
+    if (message.frameRemoved) {
+      browser.tabs.sendMessage(sender.tab.id, {
+        recalculateFrameLocation: true,
+      })
       return sendResponse(true)
     }
     if (
@@ -468,6 +469,22 @@ export default class BackgroundRecorder {
     this.attachRecorderRequestHandler = this.attachRecorderRequestHandler.bind(
       this
     )
+    this.frameCountHandler = this.frameCountHandler.bind(this)
+  }
+
+  frameCountHandler(message, sender, sendResponse) {
+    if (message.requestFrameCount) {
+      const result =
+        this.attached || this.isAttaching
+          ? this.windowSession.frameCountForTab[sender.tab.id]
+          : undefined
+      return sendResponse(result)
+    } else if (message.setFrameNumberForTab) {
+      this.windowSession.frameCountForTab[sender.tab.id] = {
+        indicatorIndex: message.indicatorIndex,
+      }
+      return sendResponse(true)
+    }
   }
 
   async attach(startUrl) {

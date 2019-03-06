@@ -20,6 +20,7 @@ import { calculateFrameIndex } from './utils'
 
 let contentSideexTabId = -1
 let frameLocation = ''
+let recordingIndicator
 
 function Recorder(window) {
   this.window = window
@@ -155,49 +156,41 @@ Recorder.prototype.detach = function() {
   detachInputListeners(this.recordingState)
 }
 
-function attachRecorderHandler(message, sender, sendResponse) { // eslint-disable-line
+function attachRecorderHandler(message, _sender, sendResponse) {
   if (message.attachRecorder) {
     recorder.attach()
     sendResponse(true)
   }
 }
 
-function detachRecorderHandler(message, sender, sendResponse) { // eslint-disable-line
+function detachRecorderHandler(message, _sender, sendResponse) {
   if (message.detachRecorder) {
     recorder.detach()
     sendResponse(true)
   }
 }
 
+const recorder = new Recorder(window)
+
 // recorder event handlers
 browser.runtime.onMessage.addListener(attachRecorderHandler)
 browser.runtime.onMessage.addListener(detachRecorderHandler)
 
-function findRecordingIndicator() {
-  try {
-    return document.getElementById('selenium-ide-indicator')
-  } catch (error) {
-    return true
-  }
-}
-
 function addRecordingIndicator() {
-  if (!findRecordingIndicator() && frameLocation === 'root') {
-    browser.runtime.sendMessage({
-      setFrameNumberForTab: true,
-      length: window.parent.frames.length,
-    })
-    let recordingIndicator = window.document.createElement('iframe')
+  if (frameLocation === 'root' && !recordingIndicator) {
+    const indicatorIndex = window.parent.frames.length
+    recordingIndicator = window.document.createElement('iframe')
     recordingIndicator.src = browser.runtime.getURL('/indicator.html')
     recordingIndicator.id = 'selenium-ide-indicator'
-    recordingIndicator.style.border = '1px solid white'
+    recordingIndicator.style.border = '1px solid #d30100'
+    recordingIndicator.style.borderRadius = '50px'
     recordingIndicator.style.position = 'fixed'
     recordingIndicator.style.bottom = '36px'
     recordingIndicator.style.right = '36px'
-    recordingIndicator.style.width = '280px'
-    recordingIndicator.style.height = '80px'
-    recordingIndicator.style['background-color'] = 'whitesmoke'
-    recordingIndicator.style['box-shadow'] = '7px 7px 10px 0 rgba(0,0,0,0.3)'
+    recordingIndicator.style.width = '400px'
+    recordingIndicator.style.height = '50px'
+    recordingIndicator.style['background-color'] = '#f7f7f7'
+    recordingIndicator.style['box-shadow'] = '0 7px 10px 0 rgba(0,0,0,0.1)'
     recordingIndicator.style.transition = 'bottom 100ms linear'
     recordingIndicator.style['z-index'] = 1000000000000000
     recordingIndicator.addEventListener(
@@ -226,27 +219,41 @@ function addRecordingIndicator() {
           },
           '*'
         )
+        recordingIndicator.style.borderColor = 'black'
+        setTimeout(() => {
+          recordingIndicator.style.borderColor = '#d30100'
+        }, 1000)
         sendResponse(true)
       }
     })
+    return browser.runtime
+      .sendMessage({
+        setFrameNumberForTab: true,
+        indicatorIndex: indicatorIndex,
+      })
+      .catch(() => {})
   }
+}
+
+function getFrameCount() {
+  return browser.runtime.sendMessage({
+    requestFrameCount: true,
+  })
 }
 
 function removeRecordingIndicator() {
-  let element = findRecordingIndicator()
-  if (element) {
-    element.parentElement.removeChild(element)
+  if (frameLocation === 'root' && recordingIndicator) {
+    recordingIndicator.parentElement.removeChild(recordingIndicator)
+    recordingIndicator = undefined
   }
 }
 
-// TODO: Decouple frame location from recording since its also used in playback
-// and not obvious that that's happening (a.k.a. MAGIC!).
 // set frame id
-;(async function getframeLocation() {
+async function getFrameLocation() {
   let currentWindow = window
   let currentParentWindow
-  let recordingIndicator
   let recordingIndicatorIndex
+  let frameCount
 
   while (currentWindow !== window.top) {
     currentParentWindow = currentWindow.parent
@@ -254,21 +261,9 @@ function removeRecordingIndicator() {
       break
     }
 
-    try {
-      recordingIndicator = currentParentWindow.document.getElementById(
-        'selenium-ide-indicator'
-      )
-    } catch (e) {
-      // If we got here looking for the indicator, its likely that we found it
-      // but hit a CORS restriction. So we assume that's the case and set the
-      // indicator variable to true.
-      recordingIndicator = true
-    }
-
-    if (recordingIndicator) {
-      recordingIndicatorIndex = await browser.runtime.sendMessage({
-        requestFrameIndex: true,
-      })
+    if (currentParentWindow === window.top) {
+      frameCount = await getFrameCount().catch(() => {})
+      if (frameCount) recordingIndicatorIndex = frameCount.indicatorIndex
     }
 
     for (let idx = 0; idx < currentParentWindow.frames.length; idx++) {
@@ -277,7 +272,10 @@ function removeRecordingIndicator() {
       if (frame === currentWindow) {
         frameLocation =
           ':' +
-          calculateFrameIndex(recordingIndicatorIndex, idx) +
+          calculateFrameIndex({
+            indicatorIndex: recordingIndicatorIndex,
+            targetFrameIndex: idx,
+          }) +
           frameLocation
         currentWindow = currentParentWindow
         break
@@ -285,11 +283,34 @@ function removeRecordingIndicator() {
     }
   }
   frameLocation = 'root' + frameLocation
+  await browser.runtime
+    .sendMessage({ frameLocation: frameLocation })
+    .catch(() => {})
+}
+
+function recalculateFrameLocation(message, _sender, sendResponse) {
+  if (message.recalculateFrameLocation) {
+    ;(async () => {
+      removeRecordingIndicator()
+      setTimeout(async () => {
+        await addRecordingIndicator()
+      }, 100)
+      frameLocation = ''
+      await getFrameLocation()
+      sendResponse(true)
+    })()
+    return true
+  }
+}
+
+browser.runtime.onMessage.addListener(recalculateFrameLocation)
+
+// runs in the content script of each frame
+// e.g., once on load
+;(async () => {
+  await getFrameLocation()
 })()
 
-browser.runtime.sendMessage({ frameLocation: frameLocation }).catch(() => {})
-
-const recorder = new Recorder(window)
 window.recorder = recorder
 window.contentSideexTabId = contentSideexTabId
 window.Recorder = Recorder

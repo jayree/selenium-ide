@@ -101,9 +101,9 @@ class RenameDialogContents extends React.Component {
         this.props.isNewTest || this.props.type === 'project'
           ? 'OK'
           : this.state.isRenaming
-            ? 'RENAME'
-            : 'ADD',
-      cancelButton: this.props.isNewTest ? 'LATER' : 'CANCEL',
+            ? 'rename'
+            : 'add',
+      cancelButton: this.props.isNewTest ? 'later' : 'cancel',
       inputLabel: this.props.isNewTest
         ? 'test name'
         : this.state.type + ' name',
@@ -113,7 +113,12 @@ class RenameDialogContents extends React.Component {
         title={content.title}
         type={this.state.valid ? 'info' : 'warn'}
         renderFooter={() => (
-          <span className="right">
+          <span
+            className="right"
+            style={{
+              display: 'flex',
+            }}
+          >
             <FlatButton
               disabled={this.props.isNewTest && !!this.state.value}
               onClick={this.props.cancel}

@@ -18,9 +18,11 @@
 import browser from 'webextension-polyfill'
 import Debugger, { convertLocator } from '../debugger'
 import PlaybackState from '../../stores/view/PlaybackState'
-import variables from '../../stores/view/Variables'
+import { Logger, Channels, output } from '../../stores/view/Logs'
+import FrameNotFoundError from '../../../errors/frame-not-found'
 import { absolutifyUrl } from '../playback/utils'
-import { searchDocTree, userAgent as parsedUA } from '../../../common/utils'
+import { userAgent as parsedUA } from '../../../common/utils'
+import { buildFrameTree } from '../playback/cdp-utils'
 import './bootstrap'
 
 function playbackPausing() {
@@ -38,11 +40,13 @@ export default class ExtCommand {
     // TODO: flexible wait
     this.waitInterval = 500
     this.waitTimes = 60
+    this.logger = new Logger(Channels.PLAYBACK)
 
     this.attached = false
 
     // Use ES6 arrow function to bind correct this
-    this.tabsOnUpdatedHandler = (tabId, changeInfo, tabInfo) => { // eslint-disable-line
+    this.tabsOnUpdatedHandler = (tabId, changeInfo, _tabInfo) => {
+      // eslint-disable-line
       if (changeInfo.status) {
         if (changeInfo.status == 'loading') {
           this.setLoading(tabId)
@@ -72,12 +76,31 @@ export default class ExtCommand {
         this.setNewTab(details.tabId)
       }
     }
+
+    this.commandVariablesHandler = (message, _sender, sendResponse) => {
+      if (message.getVar) {
+        return sendResponse(this.variables.get(message.variable))
+      } else if (message.storeVar) {
+        this.variables.set(message.storeVar, message.storeStr)
+        return sendResponse(true)
+      } else if (
+        message.log &&
+        output.logs[output.logs.length - 1].message.indexOf(
+          message.log.message
+        ) === -1
+      ) {
+        // this check may be dangerous, especially if something else is bombarding the logs
+        this.logger[message.log.type || 'log'](message.log.message)
+        return sendResponse(true)
+      }
+    }
   }
 
-  async init(baseUrl, testCaseId, options = {}) {
+  async init(baseUrl, testCaseId, options = {}, variables) {
     this.baseUrl = baseUrl
     this.testCaseId = testCaseId
     this.options = options
+    this.variables = variables
     this.waitForNewWindow = false
     this.windowName = ''
     this.windowTimeout = 2000
@@ -111,6 +134,7 @@ export default class ExtCommand {
     browser.webNavigation.onCreatedNavigationTarget.addListener(
       this.newTabHandler
     )
+    browser.runtime.onMessage.addListener(this.commandVariablesHandler)
   }
 
   detach() {
@@ -123,6 +147,7 @@ export default class ExtCommand {
     browser.webNavigation.onCreatedNavigationTarget.removeListener(
       this.newTabHandler
     )
+    browser.runtime.onMessage.removeListener(this.commandVariablesHandler)
   }
 
   getCurrentPlayingWindowSessionIdentifier() {
@@ -240,6 +265,9 @@ export default class ExtCommand {
         { frameId: top ? 0 : frameId }
       )
       .then(r => {
+        if (!r) {
+          throw new Error('result is undefined')
+        }
         return r
       })
       .catch(error => {
@@ -352,7 +380,7 @@ export default class ExtCommand {
   async setNewTab(tabId) {
     if (this.waitForNewWindow) {
       this.waitForNewWindow = false
-      variables.set(this.windowName, tabId)
+      this.variables.set(this.windowName, tabId)
     }
     this.windowSession.openedTabIds[
       this.getCurrentPlayingWindowSessionIdentifier()
@@ -372,6 +400,10 @@ export default class ExtCommand {
 
   async doDebugger() {
     await PlaybackState.break()
+  }
+
+  async doEcho(string) {
+    this.logger.log(`echo: ${string}`)
   }
 
   doOpen(targetUrl) {
@@ -486,36 +518,39 @@ export default class ExtCommand {
     }
   }
 
-  doType(locator, value, top) {
+  async doType(locator, value, top) {
     if (/^([\w]:\\|\\\\|\/)/.test(value)) {
       const browserName = parsedUA.browser.name
       if (browserName !== 'Chrome')
         return Promise.reject(
-          new Error('File uploading is only support in Chrome at this time')
+          new Error('File uploading is only supported in Chrome at this time')
         )
       const connection = new Debugger(this.getCurrentPlayingTabId())
-      return connection
-        .attach()
-        .then(() =>
-          connection.getDocument().then(docNode =>
-            this.convertToQuerySelector(locator).then(selector =>
-              connection.querySelector(selector, docNode.nodeId).then(nodeId =>
-                connection
-                  .sendCommand('DOM.setFileInputFiles', {
-                    nodeId,
-                    files: value.split(','),
-                  })
-                  .then(connection.detach)
-                  .then(() => ({ result: 'success' }))
-              )
-            )
-          )
+      try {
+        await connection.attach()
+        const selector = await this.convertToQuerySelector(locator)
+        const nodeId = await connection.querySelector(
+          selector,
+          await this.getDocNodeId(connection)
         )
-        .catch(e => {
-          return connection.detach().then(() => {
-            throw e
-          })
+        await connection.sendCommand('DOM.setFileInputFiles', {
+          nodeId,
+          files: value.split(','),
         })
+        await connection.detach()
+        return {
+          result: 'success',
+        }
+      } catch (e) {
+        await connection.detach()
+        if (e instanceof FrameNotFoundError) {
+          throw new Error(
+            'Unable to upload files due to cross origin frames in the page'
+          )
+        } else {
+          throw e
+        }
+      }
     } else {
       return this.sendMessage('type', locator, value, top)
     }
@@ -523,21 +558,36 @@ export default class ExtCommand {
 
   getFrameIds() {
     const frameLocation = this.getCurrentPlayingFrameLocation()
-    const frameIds = frameLocation.split(':')
+    const frameIds = frameLocation.split(':').map(Math.floor)
     frameIds.shift()
     if (frameIds.length > 0) return frameIds
   }
 
-  async getDocNodeId(connection) {
-    const docTree = await connection.getDocument()
-    const frameIds = this.getFrameIds()
-    if (frameIds) {
-      const { childFrames } = await connection.getFrameTree()
-      const frameId = Debugger.getFrameId(childFrames, frameIds)
-      const node = searchDocTree(docTree, 'frameId', frameId)
-      return node.contentDocument.children[0].children[1].nodeId
+  getCdpFrame(frameTree, frameIndices) {
+    if (frameIndices.length === 1) {
+      return frameTree.children[frameIndices.shift()]
     } else {
-      return docTree.nodeId
+      return this.getFrameId(frameTree[frameIndices.shift()], frameIndices)
+    }
+  }
+
+  async getDocNodeId(connection) {
+    try {
+      const docTree = await connection.getDocument()
+      const frameIds = this.getFrameIds()
+      if (frameIds) {
+        const tree = buildFrameTree(docTree)
+        const frame = this.getCdpFrame(tree, frameIds)
+        if (frame.documentNodeId) {
+          return frame.documentNodeId
+        } else {
+          throw new Error('frame not found')
+        }
+      } else {
+        return docTree.nodeId
+      }
+    } catch (e) {
+      throw new FrameNotFoundError(e.message)
     }
   }
 
@@ -549,18 +599,20 @@ export default class ExtCommand {
         await connection.sendCommand('DOM.focus', { nodeId })
         await connection.sendCommand('Input.dispatchKeyEvent', {
           type: 'keyDown',
-          keyCode: 13,
+          windowsVirtualKeyCode: 13,
           key: 'Enter',
           code: 'Enter',
           text: '\r',
         })
         await connection.sendCommand('Input.dispatchKeyEvent', {
-          type: 'keyDown',
-          keyCode: 13,
+          type: 'keyUp',
+          windowsVirtualKeyCode: 13,
           key: 'Enter',
           code: 'Enter',
           text: '\r',
         })
+        // adding minimal sleep after Enter to address race conditions
+        await new Promise(resolve => setTimeout(resolve, 500))
       }
       try {
         await connection.attach()
@@ -587,7 +639,11 @@ export default class ExtCommand {
         }
       } catch (e) {
         await connection.detach()
-        throw e
+        if (e instanceof FrameNotFoundError) {
+          return this.sendMessage('sendKeys', locator, value, top)
+        } else {
+          throw e
+        }
       }
     } else {
       return this.sendMessage('sendKeys', locator, value, top)
@@ -595,12 +651,12 @@ export default class ExtCommand {
   }
 
   doStore(string, varName) {
-    variables.set(varName, string)
+    this.variables.set(varName, string)
     return Promise.resolve()
   }
 
   doStoreWindowHandle(varName) {
-    variables.set(varName, this.getCurrentPlayingTabId())
+    this.variables.set(varName, this.getCurrentPlayingTabId())
     return Promise.resolve()
   }
 
@@ -810,6 +866,7 @@ export default class ExtCommand {
   isExtCommand(command) {
     switch (command) {
       case 'debugger':
+      case 'echo':
       case 'pause':
       case 'open':
       case 'selectFrame':

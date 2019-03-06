@@ -17,6 +17,7 @@
 
 import generate from 'project-name-generator'
 import { CommandsArray } from '../models/Command'
+import Command from '../models/Command'
 import UiState from './view/UiState'
 
 export default function seed(store, numberOfSuites = 0) {
@@ -388,7 +389,7 @@ export default function seed(store, numberOfSuites = 0) {
   storeTextTest.createCommand(undefined, 'open', '/login')
   storeTextTest.createCommand(undefined, 'sendKeys', 'css=#username', 'blah')
   storeTextTest.createCommand(undefined, 'storeValue', 'css=#username', 'aVar')
-  storeTextTest.createCommand(undefined, 'echo', '${aVar}')
+  storeTextTest.createCommand(undefined, 'assert', 'aVar', 'blah')
 
   const submitTest = store.createTestCase('submit')
   submitTest.createCommand(undefined, 'open', '/login')
@@ -494,10 +495,19 @@ export default function seed(store, numberOfSuites = 0) {
     'css=#input-example input'
   )
 
-  const locatorFallbackTest = store.createTestCase('locator fallback template')
+  const locatorFallbackTest = store.createTestCase('locator fallback')
   locatorFallbackTest.createCommand(undefined, 'open', '/dynamic_loading/2')
   locatorFallbackTest.createCommand(undefined, 'click', 'css=button')
-  locatorFallbackTest.createCommand(undefined, 'clickAt', 'css=#finis > h4')
+  const locatorFallbackTestCommand = new Command(
+    undefined,
+    'clickAt',
+    'css=#finis > h4'
+  )
+  locatorFallbackTestCommand.setTargets([
+    ['css=#finis > h4', 'css'],
+    ['css=#finish > h4', 'css'],
+  ])
+  locatorFallbackTest.addCommand(locatorFallbackTestCommand)
   locatorFallbackTest.createCommand(
     undefined,
     'assertText',
@@ -553,11 +563,27 @@ export default function seed(store, numberOfSuites = 0) {
   selectWindow.createCommand(undefined, 'assertTitle', 'The Internet')
   selectWindow.createCommand(undefined, 'close')
 
+  const login = store.createTestCase('login')
+  login.createCommand(undefined, 'open', '/login')
+  login.createCommand(undefined, 'sendKeys', 'id=username', '${username}')
+  login.createCommand(undefined, 'sendKeys', 'id=password', '${password}')
+  login.createCommand(undefined, 'click', 'css=#login button')
+
+  const reuse = store.createTestCase('reuse')
+  reuse.createCommand(undefined, 'store', 'tomsmith', 'username')
+  reuse.createCommand(undefined, 'store', 'SuperSecretPassword!', 'password')
+  reuse.createCommand(undefined, 'run', 'login')
+  reuse.createCommand(
+    undefined,
+    'assertText',
+    'id=flash',
+    'You logged into a secure area!\\n×'
+  )
+
   const suiteAll = store.createSuite('all tests')
   store.tests.forEach(function(test) {
     suiteAll.addTestCase(test)
   })
-  suiteAll.removeTestCase(locatorFallbackTest)
 
   const suiteControlFlow = store.createSuite('control flow')
   suiteControlFlow.addTestCase(controlFlowIfTest)
@@ -589,11 +615,13 @@ export default function seed(store, numberOfSuites = 0) {
   waitSuite.addTestCase(waitTest5)
 
   UiState.changeView('Test suites')
-  let suiteState = UiState.getSuiteState(suiteAll)
-  suiteState.setOpen(true)
-  UiState.selectTest(clickTest, suiteAll)
+  suiteAll.setOpen(true)
+  UiState.selectTest(checkTest, suiteAll)
+  UiState.selectCommand(click)
 
   store.changeName('seed project')
+
+  UiState.saved()
 
   return store
 }

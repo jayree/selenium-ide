@@ -15,14 +15,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import browser from 'webextension-polyfill'
-import { Logger, Channels, output } from '../../stores/view/Logs'
-import variables from '../../stores/view/Variables'
-
-const logger = new Logger(Channels.PLAYBACK)
 const nbsp = String.fromCharCode(160)
 
-export function xlateArgument(value) {
+export function xlateArgument(value, variables) {
   value = value.replace(/^\s+/, '')
   value = value.replace(/\s+$/, '')
   let r2
@@ -31,7 +26,7 @@ export function xlateArgument(value) {
     const regexp = /\$\{(.*?)\}/g
     let lastIndex = 0
     while ((r2 = regexp.exec(value))) {
-      if (variables.get(r2[1])) {
+      if (variables.has(r2[1])) {
         if (r2.index - lastIndex > 0) {
           parts.push(string(value.substring(lastIndex, r2.index)))
         }
@@ -50,13 +45,13 @@ export function xlateArgument(value) {
     if (lastIndex < value.length) {
       parts.push(string(value.substring(lastIndex, value.length)))
     }
-    return parts.join('')
+    return parts.map(String).join('')
   } else {
     return string(value)
   }
 }
 
-export function interpolateScript(script) {
+export function interpolateScript(script, variables) {
   let value = script.replace(/^\s+/, '').replace(/\s+$/, '')
   let r2
   let parts = []
@@ -106,27 +101,3 @@ function string(value) {
     return ''
   }
 }
-
-function handleFormatCommand(message, _sender, sendResponse) {
-  if (message.getVar) {
-    return sendResponse(variables.get(message.variable))
-  } else if (message.storeVar) {
-    variables.set(message.storeVar, message.storeStr)
-    return sendResponse(true)
-  } else if (message.echoStr) {
-    logger.log('echo: ' + message.echoStr)
-    return sendResponse(true)
-  } else if (
-    message.log &&
-    output.logs[output.logs.length - 1].message.indexOf(message.log.message) ===
-      -1
-  ) {
-    // this check may be dangerous, especially if something else is bombarding the logs
-    logger[message.log.type || 'log'](message.log.message)
-    return sendResponse(true)
-  }
-}
-
-try {
-  browser.runtime.onMessage.addListener(handleFormatCommand)
-} catch(e) {} // eslint-disable-line

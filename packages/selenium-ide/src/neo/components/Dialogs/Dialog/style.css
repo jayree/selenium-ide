@@ -1,6 +1,5 @@
 .dialog {
-  width: 300px;
-  height: 340px;
+  min-width: 300px;
   color: #505050;
   display: flex;
   flex-direction: column;
@@ -24,8 +23,11 @@
   background-color: #ff5f7b;
 }
 
+.dialog .dialog__cover-image {
+  padding-right: 15px;
+}
+
 .dialog .dialog__title {
-  padding-left: 15px;
   color: #fff;
 }
 

@@ -137,7 +137,7 @@ Recorder.addEventHandler(
         record('click', locatorBuilders.buildAll(event.target), '')
         this.recordingState.preventClickTwice = true
       }
-      setTimeout(function() {
+      setTimeout(() => {
         this.recordingState.preventClickTwice = false
       }, 30)
     }
@@ -252,10 +252,10 @@ Recorder.addEventHandler(
             }
           }
           this.recordingState.preventClick = true
-          setTimeout(function() {
+          setTimeout(() => {
             this.recordingState.preventClick = false
           }, 500)
-          setTimeout(function() {
+          setTimeout(() => {
             if (this.recordingState.enterValue != event.target.value)
               this.recordingState.enterTarget = null
           }, 50)
@@ -279,7 +279,7 @@ Recorder.addEventHandler(
             )
           }
 
-          setTimeout(function() {
+          setTimeout(() => {
             this.recordingState.tempValue = this.recordingState.focusTarget.value
           }, 250)
 
@@ -325,19 +325,13 @@ Recorder.addEventHandler(
       event.clientY < window.document.documentElement.clientHeight
     ) {
       mousedown = event
-      mouseup = setTimeout(
-        function() {
-          mousedown = undefined
-        }.bind(this),
-        200
-      )
+      mouseup = setTimeout(() => {
+        mousedown = undefined
+      }, 200)
 
-      selectMouseup = setTimeout(
-        function() {
-          selectMousedown = event
-        }.bind(this),
-        200
-      )
+      selectMouseup = setTimeout(() => {
+        selectMousedown = event
+      }, 200)
     }
     mouseoverQ = []
 
@@ -484,12 +478,9 @@ Recorder.addEventHandler(
   'dragAndDropToObject',
   'dragstart',
   function(event) {
-    dropLocator = setTimeout(
-      function() {
-        dragstartLocator = event
-      }.bind(this),
-      200
-    )
+    dropLocator = setTimeout(() => {
+      dragstartLocator = event
+    }, 200)
   },
   true
 )
@@ -530,7 +521,7 @@ Recorder.addEventHandler(
     if (pageLoaded === true) {
       scrollDetector = event.target
       clearTimeout(prevTimeOut)
-      prevTimeOut = setTimeout(function() {
+      prevTimeOut = setTimeout(() => {
         scrollDetector = undefined
       }, 500)
     }
@@ -543,8 +534,7 @@ Recorder.addEventHandler(
 let nowNode = 0,
   mouseoverLocator,
   nodeInsertedLocator,
-  nodeAttrChange,
-  nodeAttrChangeTimeout
+  nodeInsertedAttrChange
 Recorder.addEventHandler(
   'mouseOver',
   'mouseover',
@@ -555,14 +545,11 @@ Recorder.addEventHandler(
       let clickable = findClickableElement(event.target)
       if (clickable) {
         nodeInsertedLocator = event.target
-        setTimeout(function() {
+        nodeInsertedAttrChange = locatorBuilders.buildAll(event.target)
+        setTimeout(() => {
           nodeInsertedLocator = undefined
+          nodeInsertedAttrChange = undefined
         }, 500)
-
-        nodeAttrChange = locatorBuilders.buildAll(event.target)
-        nodeAttrChangeTimeout = setTimeout(function() {
-          nodeAttrChange = undefined
-        }, 10)
       }
       //drop target overlapping
       if (mouseoverQ) {
@@ -592,6 +579,23 @@ Recorder.addEventHandler(
 // END
 
 Recorder.addMutationObserver(
+  'FrameDeleted',
+  function(mutations) {
+    mutations.forEach(async mutation => {
+      const removedNodes = await mutation.removedNodes
+      if (
+        removedNodes.length &&
+        removedNodes[0].nodeName === 'IFRAME' &&
+        removedNodes[0].id !== 'selenium-ide-indicator'
+      ) {
+        browser.runtime.sendMessage({ frameRemoved: true }).catch(() => {})
+      }
+    })
+  },
+  { childList: true }
+)
+
+Recorder.addMutationObserver(
   'DOMNodeInserted',
   function(mutations) {
     if (
@@ -614,16 +618,17 @@ Recorder.addMutationObserver(
         //TODO: fix target
         record('runScript', [['window.scrollTo(0,' + window.scrollY + ')']], '')
         pageLoaded = false
-        setTimeout(function() {
+        setTimeout(() => {
           pageLoaded = true
         }, 550)
         scrollDetector = undefined
         nodeInsertedLocator = undefined
       }
       if (nodeInsertedLocator) {
-        record('mouseOver', locatorBuilders.buildAll(nodeInsertedLocator), '')
+        record('mouseOver', nodeInsertedAttrChange, '')
         mouseoutLocator = nodeInsertedLocator
         nodeInsertedLocator = undefined
+        nodeInsertedAttrChange = undefined
         mouseoverLocator = undefined
       }
     }
@@ -643,7 +648,7 @@ Recorder.addEventHandler(
     } else {
       pageLoaded = false
       clearTimeout(readyTimeOut)
-      readyTimeOut = setTimeout(function() {
+      readyTimeOut = setTimeout(() => {
         pageLoaded = true
       }, 1500) //setReady after complete 1.5s
     }

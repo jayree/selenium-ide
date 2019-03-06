@@ -34,7 +34,7 @@ import Manager from '../../plugin/manager'
 import chromeGetFile from './filesystem/chrome'
 import firefoxGetFile from './filesystem/firefox'
 import { userAgent as parsedUA } from '../../common/utils'
-export const supportedFileFormats = '.side, text/html'
+import url from 'url'
 
 export function getFile(path) {
   const browserName = parsedUA.browser.name
@@ -76,6 +76,15 @@ export function saveProject(_project) {
   UiState.saved()
 }
 
+export function sanitizeProjectName(projectName) {
+  let name = projectName
+  if (name.startsWith('http')) {
+    return url.parse(projectName).host
+  } else {
+    return name.replace(/([^a-z0-9 ._-]+)/gi, '')
+  }
+}
+
 function downloadProject(project) {
   return exportProject(project).then(snapshot => {
     if (snapshot) {
@@ -83,7 +92,7 @@ function downloadProject(project) {
       Object.assign(project, Manager.emitDependencies())
     }
     return browser.downloads.download({
-      filename: project.name + '.side',
+      filename: sanitizeProjectName(project.name) + '.side',
       url: createBlob(
         'application/json',
         beautify(JSON.stringify(project), { indent_size: 2 })
@@ -101,24 +110,21 @@ function exportProject(project) {
       skipStdLibEmitting: true,
     }).catch(err => {
       const markdown = ParseError((err && err.message) || err)
-      ModalState.showAlert(
-        {
-          title: 'Error saving project',
-          description: markdown,
-          confirmLabel: 'Download log',
-          cancelLabel: 'Close',
-        },
-        choseDownload => {
-          if (choseDownload) {
-            browser.downloads.download({
-              filename: project.name + '-logs.md',
-              url: createBlob('text/markdown', markdown),
-              saveAs: true,
-              conflictAction: 'overwrite',
-            })
-          }
+      ModalState.showAlert({
+        title: 'Error saving project',
+        description: markdown,
+        confirmLabel: 'download log',
+        cancelLabel: 'close',
+      }).then(choseDownload => {
+        if (choseDownload) {
+          browser.downloads.download({
+            filename: project.name + '-logs.md',
+            url: createBlob('text/markdown', markdown),
+            saveAs: true,
+            conflictAction: 'overwrite',
+          })
         }
-      )
+      })
       return Promise.reject()
     })
   })
@@ -144,7 +150,7 @@ export function loadProject(project, file) {
     ModalState.showAlert({
       title: 'Error migrating project',
       description: error.message,
-      confirmLabel: 'Close',
+      confirmLabel: 'close',
     })
   }
   loadAsText(file).then(contents => {
@@ -164,23 +170,20 @@ export function loadProject(project, file) {
         } else if (type === FileTypes.TestCase) {
           let { test, baseUrl } = migrateTestCase(contents)
           if (project.urls.length && !project.urls.includes(baseUrl)) {
-            ModalState.showAlert(
-              {
-                title: 'Migrate test case',
-                description: `The test case you're trying to migrate has a different base URL (${baseUrl}) than the project's one.  \nIn order to migrate the test case URLs will be made absolute.`,
-                confirmLabel: 'Migrate',
-                cancelLabel: 'Discard',
-              },
-              choseMigration => {
-                if (choseMigration) {
-                  UiState.selectTest(
-                    project.addTestCase(
-                      TestCase.fromJS(migrateUrls(test, baseUrl))
-                    )
+            ModalState.showAlert({
+              title: 'Migrate test case',
+              description: `The test case you're trying to migrate has a different base URL (${baseUrl}) than the project's one.  \nIn order to migrate the test case URLs will be made absolute.`,
+              confirmLabel: 'migrate',
+              cancelLabel: 'discard',
+            }).then(choseMigration => {
+              if (choseMigration) {
+                UiState.selectTest(
+                  project.addTestCase(
+                    TestCase.fromJS(migrateUrls(test, baseUrl))
                   )
-                }
+                )
               }
-            )
+            })
           } else {
             UiState.selectTest(
               project.addTestCase(TestCase.fromJS(test, baseUrl))

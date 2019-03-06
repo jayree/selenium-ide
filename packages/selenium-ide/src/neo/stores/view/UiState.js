@@ -18,7 +18,6 @@
 import { action, computed, observable, observe, extendObservable } from 'mobx'
 import storage from '../../IO/storage'
 import SuiteState from './SuiteState'
-import TestState from './TestState'
 import PlaybackState from './PlaybackState'
 import ModalState from './ModalState'
 import Command from '../../models/Command'
@@ -57,13 +56,9 @@ class UiState {
   @observable
   minNavigationWidth = 180
   @observable
-  maxNavigationWidth = 250
+  maxNavigationWidth = 350
   @observable
-  _navigationWidth = 180
-  @observable
-  navigationHover = false
-  @observable
-  navigationDragging = false
+  navigationWidth = 180
   @observable
   pristineCommand = new Command()
   @observable
@@ -75,7 +70,6 @@ class UiState {
 
   constructor() {
     this.suiteStates = {}
-    this.testStates = {}
     this.filterFunction = this.filterFunction.bind(this)
     this.observePristine()
     storage.get().then(data => {
@@ -100,6 +94,7 @@ class UiState {
       }
     })
     this.recorder = new BackgroundRecorder(WindowSession)
+    this.windowSession = WindowSession
   }
 
   @action.bound
@@ -134,13 +129,6 @@ class UiState {
     return speed ? speed : 1
   }
 
-  @computed
-  get navigationWidth() {
-    return this.navigationHover
-      ? this._navigationWidth
-      : this.minNavigationWidth
-  }
-
   @action.bound
   _changeView(view, ignoreCache) {
     this.lastViewSelection.set(this.selectedView, this.selectedTest)
@@ -158,21 +146,17 @@ class UiState {
   @action.bound
   async changeView(view, ignoreCache) {
     if (this.isRecording && view !== this.selectedView) {
-      ModalState.showAlert(
-        {
-          title: 'Stop recording',
-          description:
-            'Are you sure you would like to stop recording, and change views?',
-          confirmLabel: 'Stop recording',
-          cancelLabel: 'cancel',
-        },
-        async choseChange => {
-          if (choseChange) {
-            await this.stopRecording()
-            this._changeView(view, ignoreCache)
-          }
-        }
-      )
+      const choseChange = await ModalState.showAlert({
+        title: 'Stop recording',
+        description:
+          'Changing the current view will stop the recording process. Would you like to continue?',
+        confirmLabel: 'stop recording',
+        cancelLabel: 'cancel',
+      })
+      if (choseChange) {
+        await this.stopRecording()
+        this._changeView(view, ignoreCache)
+      }
     } else {
       this._changeView(view, ignoreCache)
     }
@@ -212,43 +196,47 @@ class UiState {
         stack !== undefined && stack >= 0
           ? PlaybackState.callstack[stack].callee
           : test
-      if (_test !== this.displayedTest) {
+      if (
+        _test &&
+        (_test !== this.displayedTest || suite !== this.selectedTest.suite)
+      ) {
+        this.selectedTest = {
+          test,
+          suite,
+          stack: stack >= 0 ? stack : undefined,
+        }
         if (PlaybackState.isPlaying && !PlaybackState.paused) {
           this.selectCommand(undefined)
         } else if (_test && _test.commands.length) {
-          this.selectCommand(_test.commands[0])
+          let command = this.selectedTest.test.selectedCommand
+          command = command ? command : _test.commands[0]
+          this.selectCommand(command)
         } else if (_test && !_test.commands.length) {
           this.selectCommand(this.pristineCommand)
         } else {
           this.selectCommand(undefined)
         }
-      }
-      this.selectedTest = {
-        test,
-        suite,
-        stack: stack >= 0 ? stack : undefined,
+      } else if (!_test) {
+        this.selectedTest = {}
+        this.selectCommand(undefined)
       }
     }
   }
 
   @action.bound
-  selectTest(test, suite, stack, override) {
+  async selectTest(test, suite, stack, override) {
     if (this.isRecording && test !== this.selectedTest.test) {
-      ModalState.showAlert(
-        {
-          title: 'Stop recording',
-          description:
-            'Are you sure you would like to stop recording, and select a different test?',
-          confirmLabel: 'Stop recording',
-          cancelLabel: 'cancel',
-        },
-        async choseSelect => {
-          if (choseSelect) {
-            await this.stopRecording()
-            this._selectTest(test, suite, stack, override)
-          }
-        }
-      )
+      const choseSelect = await ModalState.showAlert({
+        title: 'Stop recording',
+        description:
+          'Leaving this test and moving to another one will stop the recording process. Would you like to continue?',
+        confirmLabel: 'stop recording',
+        cancelLabel: 'cancel',
+      })
+      if (choseSelect) {
+        await this.stopRecording()
+        this._selectTest(test, suite, stack, override)
+      }
     } else {
       this._selectTest(test, suite, stack, override)
     }
@@ -267,7 +255,7 @@ class UiState {
       const test = selectTestInArray(index, tests)
       const suiteIndex = this._project.suites.indexOf(suite)
       if (test) {
-        suiteState.setOpen(true)
+        suite.setOpen(true)
         this.selectTest(test, suite)
       } else if (suiteIndex > 0 && index < 0) {
         const previousSuite = this._project.suites[suiteIndex - 1]
@@ -304,7 +292,12 @@ class UiState {
       PlaybackState.paused ||
       opts.isCommandTarget
     ) {
-      this.selectedCommand = command
+      if (this.selectedTest.test) {
+        this.selectedTest.test.selectedCommand = command
+        this.selectedCommand = command
+      } else {
+        this.selectedCommand = undefined
+      }
     }
   }
 
@@ -348,7 +341,10 @@ class UiState {
   async startRecording(isInvalid) {
     let startingUrl = this.baseUrl
     if (!startingUrl) {
-      startingUrl = await ModalState.selectBaseUrl(isInvalid)
+      startingUrl = await ModalState.selectBaseUrl({
+        isInvalid,
+        confirmLabel: 'Start recording',
+      })
     }
     try {
       await this.recorder.attach(startingUrl)
@@ -454,29 +450,10 @@ class UiState {
 
   @action.bound
   resizeNavigation(width) {
-    this._navigationWidth = width
+    this.navigationWidth = width
     storage.set({
-      navigationSize: this._navigationWidth,
+      navigationSize: this.navigationWidth,
     })
-  }
-
-  @action.bound
-  setNavigationHover(hover) {
-    clearTimeout(this._hoverTimeout)
-    if (!hover) {
-      this._hoverTimeout = setTimeout(() => {
-        action(() => {
-          this.navigationHover = false
-        })()
-      }, 600)
-    } else {
-      this.navigationHover = true
-    }
-  }
-
-  @action.bound
-  setNavigationDragging(isDragging) {
-    this.navigationDragging = isDragging
   }
 
   @action.bound
@@ -524,14 +501,6 @@ class UiState {
     return this.suiteStates[suite.id]
   }
 
-  getTestState(test) {
-    if (!this.testStates[test.id]) {
-      this.testStates[test.id] = new TestState(test)
-    }
-
-    return this.testStates[test.id]
-  }
-
   filterFunction({ name }) {
     return name.toLowerCase().indexOf(this.filterTerm.toLowerCase()) !== -1
   }
@@ -549,15 +518,9 @@ class UiState {
     this.clipboard = null
     this.isRecording = false
     this.suiteStates = {}
-    this.clearTestStates()
     this.selectTest(this._project.tests[0])
     WindowSession.closeAllOpenedWindows()
-  }
-
-  @action.bound
-  clearTestStates() {
-    Object.values(this.testStates).forEach(state => state.dispose())
-    this.testStates = {}
+    this.saved()
   }
 
   isSaved() {
@@ -566,10 +529,7 @@ class UiState {
 
   @action.bound
   saved() {
-    Object.values(this.testStates).forEach(state => {
-      state.modified = false
-    })
-    this._project.setModified(false)
+    this._project.saved()
   }
 }
 

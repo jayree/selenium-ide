@@ -22,9 +22,15 @@ import Manager from './manager'
 
 export function sendMessage(id, payload) {
   return browser.runtime
-    .sendMessage(id, payload)
+    .sendMessage(id, JSON.parse(JSON.stringify(payload)))
     .then(response => {
-      if (response.error) {
+      if (response === undefined || response === null) {
+        return Promise.reject(
+          new NoResponseError(
+            `${Manager.getPlugin(id).name} plugin did not respond`
+          )
+        )
+      } else if (response.error) {
         const error =
           response.status === 'fatal'
             ? new FatalError(response.error)

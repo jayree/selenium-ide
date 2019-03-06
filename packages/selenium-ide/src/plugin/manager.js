@@ -82,7 +82,13 @@ class PluginManager {
       RegisterTestHook(this.emitTest.bind(undefined, plugin))
       if (plugin.commands) {
         plugin.commands.forEach(({ id, name, type, docs }) => {
-          const doks = this.useExistingArgTypesIfProvided(docs)
+          const doks = this.useExistingArgTypesIfProvided(
+            Object.assign({}, docs, {
+              plugin: {
+                id,
+              },
+            })
+          )
           Commands.addCommand(id, { name, type, ...doks })
           registerCommand(id, RunCommand.bind(undefined, plugin.id, id))
           RegisterEmitter(id, this.emitCommand.bind(undefined, plugin, id))
@@ -108,7 +114,7 @@ class PluginManager {
         entity: 'project',
         project,
       })
-        .catch(() => false)
+        .catch(() => ({ canEmit: false }))
         .then(({ canEmit }) => {
           plugin.canEmit = canEmit
           return plugin
@@ -120,8 +126,18 @@ class PluginManager {
   // IMPORTANT: call this function only after calling validatePluginExport!!
   emitDependencies() {
     let dependencies = {}
+    let jest = {
+      extraGlobals: [],
+    }
     let plugins = this.plugins.filter(plugin => plugin.canEmit).map(plugin => {
       Object.assign(dependencies, plugin.dependencies)
+      if (
+        plugin.jest &&
+        plugin.jest.extraGlobals &&
+        Array.isArray(plugin.jest.extraGlobals)
+      ) {
+        jest.extraGlobals.push(...plugin.jest.extraGlobals)
+      }
       return {
         id: plugin.id,
         name: plugin.name,
@@ -129,7 +145,7 @@ class PluginManager {
       }
     })
 
-    return { plugins, dependencies }
+    return { plugins, dependencies, jest }
   }
 
   emitConfiguration(plugin, project) {
@@ -184,17 +200,20 @@ class PluginManager {
   // will return all responses including errors
   emitMessage(message, keepAliveCB) {
     if (this.plugins.length) {
+      let emitInterval
       return Promise.all(
         this.plugins.map(plugin => {
           let didReachTimeout = false
-          const emitInterval = setInterval(() => {
-            didReachTimeout = true
-            keepAliveCB(plugin)
-          }, TIMEOUT)
+          if (keepAliveCB) {
+            emitInterval = setInterval(() => {
+              didReachTimeout = true
+              keepAliveCB(plugin)
+            }, TIMEOUT)
+          }
           return sendMessage(plugin.id, message)
-            .catch(err => Promise.resolve(err))
+            .catch(err => err)
             .then(response => {
-              clearInterval(emitInterval)
+              if (emitInterval) clearInterval(emitInterval)
               if (didReachTimeout) {
                 keepAliveCB(plugin, true)
               }

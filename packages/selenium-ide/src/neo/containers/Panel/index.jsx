@@ -57,6 +57,7 @@ if (!isTest) {
 if (userAgent.os.name === 'Windows') {
   require('../../styles/conditional/scrollbar.css')
   require('../../styles/conditional/button-direction.css')
+  require('../../styles/conditional/text.css')
 }
 
 const project = observable(new ProjectStore(''))
@@ -109,6 +110,7 @@ export default class Panel extends React.Component {
   constructor(props) {
     super(props)
     this.state = { project }
+    this.parseKeyDown = this.parseKeyDown.bind(this)
     this.keyDownHandler = window.document.body.onkeydown = this.handleKeyDown.bind(
       this
     )
@@ -146,117 +148,117 @@ export default class Panel extends React.Component {
       },
     })
   }
-  handleKeyDown(e) {
+  parseKeyDown(e) {
     modifier(e)
-    const key = e.key.toUpperCase()
-    const primaryAndShift = e.primaryKey && e.shiftKey
-    const onlyPrimary = e.primaryKey && !e.secondaryKey
-    const noModifiers = !e.primaryKey && !e.secondaryKey
-
+    return {
+      key: e.key.toUpperCase(),
+      primaryAndShift: e.primaryKey && e.shiftKey,
+      onlyPrimary: e.primaryKey && !e.secondaryKey,
+      noModifiers: !e.primaryKey && !e.secondaryKey,
+    }
+  }
+  handleKeyDown(e) {
+    const keyComb = this.parseKeyDown(e)
     // when editing these, remember to edit the button's tooltip as well
-    if (primaryAndShift && key === 'N') {
+    if (keyComb.primaryAndShift && keyComb.key === 'N') {
       e.preventDefault()
       this.loadNewProject()
-    } else if (onlyPrimary && key === 'N') {
+    } else if (keyComb.onlyPrimary && keyComb.key === 'N') {
       e.preventDefault()
-    } else if (onlyPrimary && key === 'S') {
+    } else if (keyComb.onlyPrimary && keyComb.key === 'S') {
       e.preventDefault()
       saveProject(this.state.project)
-    } else if (onlyPrimary && key === 'O' && this.openFile) {
+    } else if (keyComb.onlyPrimary && keyComb.key === 'O' && this.openFile) {
       e.preventDefault()
       this.openFile()
-    } else if (onlyPrimary && key === '1') {
+    } else if (keyComb.onlyPrimary && keyComb.key === '1') {
       // test view
       e.preventDefault()
-      UiState.changeView(UiState.views[+key - 1])
-    } else if (onlyPrimary && key === '2') {
+      UiState.changeView(UiState.views[+keyComb.key - 1])
+    } else if (keyComb.onlyPrimary && keyComb.key === '2') {
       // suite view
       e.preventDefault()
-      UiState.changeView(UiState.views[+key - 1])
-    } else if (onlyPrimary && key === '3') {
+      UiState.changeView(UiState.views[+keyComb.key - 1])
+    } else if (keyComb.onlyPrimary && keyComb.key === '3') {
       // execution view
       e.preventDefault()
-      UiState.changeView(UiState.views[+key - 1])
-    } else if (primaryAndShift && e.code === 'KeyR' && isProduction) {
+      UiState.changeView(UiState.views[+keyComb.key - 1])
+    } else if (keyComb.primaryAndShift && e.code === 'KeyR' && isProduction) {
       // run suite
       e.preventDefault()
       if (PlaybackState.canPlaySuite) {
         PlaybackState.playSuiteOrResume()
       }
-    } else if (onlyPrimary && key === 'R' && isProduction) {
+    } else if (keyComb.onlyPrimary && keyComb.key === 'R' && isProduction) {
       // run test
       e.preventDefault()
       if (!PlaybackState.isPlayingSuite) {
         PlaybackState.playTestOrResume()
       }
-    } else if (onlyPrimary && key === 'P') {
+    } else if (keyComb.onlyPrimary && keyComb.key === 'P') {
       // pause
       e.preventDefault()
       PlaybackState.pauseOrResume()
-    } else if (onlyPrimary && key === '.') {
+    } else if (keyComb.onlyPrimary && keyComb.key === '.') {
       // stop
       e.preventDefault()
       PlaybackState.abortPlaying()
-    } else if (onlyPrimary && key === "'") {
+    } else if (keyComb.onlyPrimary && keyComb.key === "'") {
       // step over
       e.preventDefault()
       PlaybackState.stepOver()
-    } else if (onlyPrimary && key === 'Y') {
+    } else if (keyComb.onlyPrimary && keyComb.key === 'Y') {
       // disable breakpoints
       e.preventDefault()
       PlaybackState.toggleDisableBreakpoints()
-    } else if (onlyPrimary && key === 'U') {
+    } else if (keyComb.onlyPrimary && keyComb.key === 'U') {
       // record
       e.preventDefault()
       if (!PlaybackState.isPlaying) {
         UiState.toggleRecord()
       }
-    } else if (noModifiers && key === 'ESCAPE') {
+    }
+  }
+  handleKeyDownAlt(e) {
+    // The escape key is used in internal dialog modals to cancel. But the key
+    // bubbles to the body event listener in Panel's ctor. Moving the event
+    // listener into the top-level div in render prevents the keys from being
+    // recognized unless an internal component has focus (e.g., selecting a test,
+    // a test command, or an element within the command form).
+    //
+    // To fix, separating the key handling into two functions. One with just escape
+    // that will live on the top-level div. The other with the remaining keys that
+    // will live in an event listener on document.body.
+    const key = this.parseKeyDown(e)
+    if (key.noModifiers && key.key === 'ESCAPE') {
       UiState.toggleConsole()
     }
   }
-  navigationDragStart() {
-    UiState.setNavigationDragging(true)
-    UiState.resizeNavigation(UiState.navigationWidth)
-    UiState.setNavigationHover(true)
-  }
-  navigationDragEnd() {
-    UiState.setNavigationDragging(false)
-    UiState.setNavigationHover(false)
-  }
-  loadNewProject() {
+  async loadNewProject() {
     if (!UiState.isSaved()) {
-      ModalState.showAlert(
-        {
-          title: 'Create without saving',
-          description:
-            'Are you sure you would like to create a new project without saving the current one?',
-          confirmLabel: 'Proceed',
-          cancelLabel: 'Cancel',
-        },
-        async choseProceed => {
-          if (choseProceed) {
-            await UiState.stopRecording({ nameNewTest: false })
-            this.createNewProject()
-          }
-        }
-      )
+      const choseProceed = await ModalState.showAlert({
+        title: 'Create without saving',
+        description:
+          'Are you sure you would like to create a new project without saving the current one?',
+        confirmLabel: 'proceed',
+        cancelLabel: 'cancel',
+      })
+      if (choseProceed) {
+        await UiState.stopRecording({ nameNewTest: false })
+        this.createNewProject()
+      }
     } else if (UiState.isRecording) {
-      ModalState.showAlert(
-        {
-          title: 'Stop recording',
-          description:
-            'Are you sure you would to stop recording and create a new project?',
-          confirmLabel: 'Proceed',
-          cancelLabel: 'Cancel',
-        },
-        async choseProceed => {
-          if (choseProceed) {
-            await UiState.stopRecording({ nameNewTest: false })
-            this.createNewProject()
-          }
-        }
-      )
+      const choseProceed = await ModalState.showAlert({
+        title: 'Stop recording',
+        description:
+          'Leaving this project and creating a new one will stop the recording process. Would you like to continue?',
+        confirmLabel: 'proceed',
+        cancelLabel: 'cancel',
+      })
+      if (choseProceed) {
+        await UiState.stopRecording({ nameNewTest: false })
+        this.createNewProject()
+      }
     } else {
       this.createNewProject()
     }
@@ -278,7 +280,7 @@ export default class Panel extends React.Component {
   }
   render() {
     return (
-      <div className="container">
+      <div className="container" onKeyDown={this.handleKeyDownAlt.bind(this)}>
         <SuiteDropzone
           loadProject={loadProject.bind(undefined, this.state.project)}
         >
@@ -316,8 +318,6 @@ export default class Panel extends React.Component {
                   maxSize={UiState.maxNavigationWidth}
                   size={UiState.navigationWidth}
                   onChange={UiState.resizeNavigation}
-                  onDragStarted={this.navigationDragStart}
-                  onDragFinished={this.navigationDragEnd}
                 >
                   <Navigation
                     tests={UiState.filteredTests}

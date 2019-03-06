@@ -1,7 +1,7 @@
 @font-face {
   font-family: 'selenium-ide';
-  src: url('../assets/fonts/selenium-ide.ttf?xyc7ya') format('truetype'),
-    url('../assets/fonts/selenium-ide.svg?xyc7ya#selenium-ide') format('svg');
+  src: url('../assets/fonts/selenium-ide.ttf?vpz726') format('truetype'),
+    url('../assets/fonts/selenium-ide.svg?vpz726#selenium-ide') format('svg');
   font-weight: normal;
   font-style: normal;
 }
@@ -22,22 +22,30 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-.si-remove-comment::before {
+.si-info-badge-1::before {
   content: '\e900';
 }
-
+.si-info-badge-2::before {
+  content: '\e901';
+}
+.si-info-badge-3::before {
+  content: '\e902';
+}
+.si-open-tab::before {
+  content: '\e903';
+}
+.si-remove-comment::before {
+  content: '\e904';
+}
 .si-comment::before {
   content: '\e925';
 }
-
 .si-new-project::before {
   content: '\e91e';
 }
-
 .si-record {
   position: relative;
 }
-
 .si-record::after,
 .si-record-circle::before {
   content: '\e91f';
@@ -45,140 +53,103 @@
   top: 0;
   left: 0;
 }
-
 .si-record::before,
 .si-record-out::before {
   content: '\e920';
 }
-
 .si-download::before {
-  content: '\e901';
+  content: '\e905';
 }
-
 .si-filter::before {
   content: '\e915';
 }
-
 .si-disable-breakpoints::before {
   content: '\e91b';
 }
-
 .si-break-exceptions::before {
   content: '\e91c';
 }
-
 .si-stop::before {
   content: '\e91d';
 }
-
 .si-open::before {
-  content: '\e905';
+  content: '\e906';
 }
-
 .si-pencil::before {
   content: '\e919';
 }
-
 .si-step-down::before {
   content: '\e917';
 }
-
 .si-caret-wide::before {
   content: '\e918';
 }
-
 .si-gauge-1::before {
   content: '\e90c';
 }
-
 .si-gauge-2::before {
   content: '\e90e';
 }
-
 .si-gauge-3::before {
   content: '\e912';
 }
-
 .si-gauge-4::before {
   content: '\e913';
 }
-
 .si-gauge-5::before {
   content: '\e914';
 }
-
 .si-gauge-12::before {
   content: '\e91a';
 }
-
 .si-search::before {
   content: '\e916';
 }
-
 .si-caret::before {
-  content: '\e902';
+  content: '\e907';
 }
-
 .si-check::before {
   content: '\e910';
 }
-
 .si-add::before {
   content: '\e90d';
 }
-
 .si-ic_arrow_down::before {
-  content: '\e903';
+  content: '\e908';
 }
-
 .si-clear::before {
   content: '\e921';
 }
-
 .si-delete::before {
-  content: '\e904';
+  content: '\e909';
 }
-
 .si-step-into::before {
-  content: '\e906';
+  content: '\e90a';
 }
-
 .si-info::before {
-  content: '\e907';
+  content: '\e90b';
 }
-
 .si-more::before {
   content: '\e911';
 }
-
 .si-play-all::before {
-  content: '\e908';
-}
-
-.si-play::before {
-  content: '\e909';
-}
-
-.si-pause::before {
-  content: '\e90a';
-}
-
-.si-remove::before {
-  content: '\e90b';
-}
-
-.si-code::before {
   content: '\e90f';
 }
-
-.si-save::before {
+.si-play::before {
   content: '\e922';
 }
-
-.si-select::before {
+.si-pause::before {
   content: '\e923';
 }
-
-.si-stop1::before {
+.si-remove::before {
   content: '\e924';
+}
+.si-code::before {
+  content: '\e927';
+}
+.si-save::before {
+  content: '\e928';
+}
+.si-select::before {
+  content: '\e929';
 }

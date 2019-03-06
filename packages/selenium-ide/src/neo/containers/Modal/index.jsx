@@ -18,16 +18,17 @@
 import React, { Component } from 'react'
 import PropTypes from 'prop-types'
 import { observer } from 'mobx-react'
-import Alert from '../../components/Alert'
-import TestSelector from '../../components/TestSelector'
-import ImportDialog from '../../components/ImportDialog'
-import SuiteSettings from '../../components/SuiteSettings'
+import TestSelector from '../../components/Dialogs/TestSelector'
+import ImportDialog from '../../components/Dialogs/ImportDialog'
+import SuiteSettings from '../../components/Dialogs/SuiteSettings'
 import RenameDialog from '../../components/Dialogs/Rename'
 import BaseUrlDialog from '../../components/Dialogs/BaseUrl'
 import WelcomeDialog from '../../components/Dialogs/Welcome'
 import AlertDialog from '../../components/Dialogs/Alert'
 import ModalState from '../../stores/view/ModalState'
+import NewWindowConfigurationDialog from '../../components/Dialogs/NewWindowConfiguration'
 import { isProduction } from '../../../common/utils'
+import UiState from '../../stores/view/UiState'
 
 @observer
 export default class Modal extends Component {
@@ -42,8 +43,7 @@ export default class Modal extends Component {
   render() {
     return (
       <div>
-        <Alert show={show => (ModalState.showAlert = show)} />
-        <AlertDialog show={show => (ModalState.showDialog = show)} />
+        <AlertDialog show={show => (ModalState.showAlert = show)} />
         <TestSelector
           isEditing={!!ModalState.editedSuite}
           tests={this.props.project.tests}
@@ -86,7 +86,8 @@ export default class Modal extends Component {
         />
         <BaseUrlDialog
           isSelectingUrl={ModalState.baseUrlState.selecting}
-          isInvalid={ModalState.baseUrlState.isInvalid}
+          isInvalid={!!ModalState.baseUrlState.isInvalid}
+          confirmLabel={ModalState.baseUrlState.confirmLabel}
           onUrlSelection={ModalState.baseUrlState.done}
           cancel={ModalState.baseUrlState.cancel}
         />
@@ -99,6 +100,15 @@ export default class Modal extends Component {
             completeWelcome={ModalState.completeWelcome}
           />
         ) : null}
+        <NewWindowConfigurationDialog
+          isOpen={ModalState.newWindowConfigurationState}
+          cancel={ModalState.toggleNewWindowConfiguration}
+          id="new-window"
+          name="new-window"
+          label="Opens Window"
+          command={UiState.selectedCommand || {}}
+          isUniqueWindowName={ModalState.isUniqueWindowName}
+        />
       </div>
     )
   }

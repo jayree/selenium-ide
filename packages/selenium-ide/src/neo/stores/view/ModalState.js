@@ -34,6 +34,8 @@ class ModalState {
     started: false,
     completed: false,
   }
+  @observable
+  newWindowConfigurationState = false
 
   constructor() {
     this.renameTest = this.rename.bind(this, Types.test)
@@ -42,22 +44,18 @@ class ModalState {
   }
 
   @action.bound
-  selectBaseUrl(isInvalid = true) {
+  selectBaseUrl(options = { isInvalid: true }) {
     return new Promise((res, rej) => {
       this.baseUrlState = {
+        ...options,
         selecting: true,
-        isInvalid,
         done: action(url => {
           res(url)
-          this.baseUrlState = {
-            isInvalid,
-          }
+          this.baseUrlState = {}
         }),
         cancel: action(() => {
           rej()
-          this.baseUrlState = {
-            isInvalid,
-          }
+          this.baseUrlState = {}
         }),
       }
     })
@@ -124,41 +122,33 @@ class ModalState {
   }
 
   @action.bound
-  deleteSuite(suite) {
-    this.showAlert(
-      {
-        title: 'Delete suite',
-        description: `This will permanently delete '${suite.name}'`,
-        cancelLabel: 'cancel',
-        confirmLabel: 'delete',
-      },
-      choseDelete => {
-        if (choseDelete) {
-          this._project.deleteSuite(suite)
-          UiState.selectTest()
-        }
-      }
-    )
+  async deleteSuite(suite) {
+    const choseDelete = await this.showAlert({
+      title: 'Delete suite',
+      description: `This will permanently delete '${suite.name}'`,
+      cancelLabel: 'cancel',
+      confirmLabel: 'delete',
+    })
+    if (choseDelete) {
+      this._project.deleteSuite(suite)
+      UiState.selectTest()
+    }
   }
 
   @action.bound
-  deleteTest(testCase) {
-    this.showAlert(
-      {
-        title: 'Delete test case',
-        description: `This will permanently delete '${
-          testCase.name
-        }', and remove it from all it's suites`,
-        cancelLabel: 'cancel',
-        confirmLabel: 'delete',
-      },
-      choseDelete => {
-        if (choseDelete) {
-          this._project.deleteTestCase(testCase)
-          UiState.selectTest()
-        }
-      }
-    )
+  async deleteTest(testCase) {
+    const choseDelete = await this.showAlert({
+      title: 'Delete test case',
+      description: `This will permanently delete '${
+        testCase.name
+      }', and remove it from all its suites`,
+      cancelLabel: 'cancel',
+      confirmLabel: 'delete',
+    })
+    if (choseDelete) {
+      this._project.deleteTestCase(testCase)
+      UiState.selectTest()
+    }
   }
 
   @action.bound
@@ -234,6 +224,19 @@ class ModalState {
   @action.bound
   renameProject() {
     return this.rename(Types.project, this._project.name)
+  }
+
+  @action.bound
+  toggleNewWindowConfiguration() {
+    this.newWindowConfigurationState = !this.newWindowConfigurationState
+  }
+
+  isUniqueWindowName(windowName, commandId) {
+    const commands = UiState.selectedTest.test.commands
+      .filter(command => command.id !== commandId)
+      .filter(command => command.windowHandleName !== '')
+      .map(command => command.windowHandleName)
+    return !commands.includes(windowName)
   }
 }
 

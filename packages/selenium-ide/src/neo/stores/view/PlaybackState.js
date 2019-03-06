@@ -20,7 +20,7 @@ import { action, reaction, computed, observable } from 'mobx'
 import UiState from './UiState'
 import ModalState from './ModalState'
 import Command from '../../models/Command'
-import variables from './Variables'
+import Variables from './Variables'
 import PluginManager from '../../../plugin/manager'
 import NoResponseError from '../../../errors/no-response'
 import { Logger, Channels } from './Logs'
@@ -35,6 +35,7 @@ import WindowSession from '../../IO/window-session'
 import ExtCommand from '../../IO/SideeX/ext-command'
 import WebDriverExecutor from '../../IO/playback/webdriver'
 import CommandTarget from './CommandTarget'
+import Suite from '../../models/Suite'
 
 class PlaybackState {
   @observable
@@ -88,6 +89,8 @@ class PlaybackState {
   isSilent = false
   @observable
   isSingleCommandExecutionEnabled = false
+  @observable
+  isPlayFromHere = false
 
   constructor() {
     this.maxDelay = 3000
@@ -97,6 +100,7 @@ class PlaybackState {
     this.lastSelectedView = undefined
     this.filteredTests = []
     this.commandTarget = new CommandTarget()
+    this.variables = new Variables()
     this.extCommand = new ExtCommand(WindowSession)
     this.browserDriver = new WebDriverExecutor()
 
@@ -127,9 +131,7 @@ class PlaybackState {
   @computed
   get testsToRun() {
     return this.currentRunningSuite
-      ? this.currentRunningSuite.name === '__filteredTests__' + this.runId
-        ? this.filteredTests
-        : this.currentRunningSuite.tests
+      ? this.currentRunningSuite._tests
       : this.currentRunningTest
         ? [this.stackCaller] // eslint-disable-line indent
         : undefined // eslint-disable-line indent
@@ -180,7 +182,7 @@ class PlaybackState {
     this.pauseOnExceptions = !this.pauseOnExceptions
   }
 
-  beforePlaying(play) {
+  async beforePlaying(play) {
     try {
       UiState._project.addCurrentUrl()
     } catch (e) {} // eslint-disable-line no-empty
@@ -188,21 +190,17 @@ class PlaybackState {
     UiState.changeView('Executing', true)
     UiState.selectCommand(undefined)
     if (UiState.isRecording) {
-      ModalState.showAlert(
-        {
-          title: 'Stop recording',
-          description:
-            'Are you sure you would like to stop recording, and start playing?',
-          confirmLabel: 'Playback',
-          cancelLabel: 'cancel',
-        },
-        chosePlay => {
-          if (chosePlay) {
-            UiState.stopRecording()
-            play()
-          }
-        }
-      )
+      const chosePlay = await ModalState.showAlert({
+        title: 'Stop recording',
+        description:
+          'Playing this test will stop the recording process. Would you like to continue?',
+        confirmLabel: 'playback',
+        cancelLabel: 'cancel',
+      })
+      if (chosePlay) {
+        UiState.stopRecording()
+        play()
+      }
     } else {
       play()
     }
@@ -213,7 +211,8 @@ class PlaybackState {
     this.isPlaying = true
     return play(
       UiState.baseUrl,
-      process.env.USE_WEBDRIVER ? this.browserDriver : this.extCommand
+      process.env.USE_WEBDRIVER ? this.browserDriver : this.extCommand,
+      this.variables
     )
   }
 
@@ -250,7 +249,7 @@ class PlaybackState {
     if (this.paused) {
       return this.resume()
     } else if (!this.isPlaying) {
-      return this.startPlayingFilteredTests()
+      return this.startPlayingSuite({ isFiltered: true })
     }
   }
 
@@ -273,43 +272,67 @@ class PlaybackState {
   }
 
   @action.bound
-  _startPlayingCollection(suite, tests, eventMessage, runId = uuidv4()) {
-    const playSuite = action(() => {
-      this.runId = runId
-      this.resetState()
-      this.currentRunningSuite = suite
-      this._testsToRun = [...tests]
-      this.testsCount = this._testsToRun.length
-      PluginManager.emitMessage({
-        action: 'event',
-        event: eventMessage,
-        options: {
-          runId: runId,
-          suiteName: this.currentRunningSuite.name,
-          projectName: UiState._project.name,
-        },
-      }).then(() => {
-        this.playNext()
+  startPlayingSuite(opts = { isFiltered: false }) {
+    this.cleanupCurrentRunningVariables()
+    this.runId = uuidv4()
+    let suite
+    if (!opts.isFiltered) {
+      suite = UiState.selectedTest.suite
+    } else {
+      suite = new Suite(undefined, 'All Tests')
+      UiState.filteredTests.forEach(function(test) {
+        suite.addTestCase(test)
       })
+    }
+    this.resetState()
+    this.currentRunningSuite = suite
+    this._testsToRun = [...suite._tests]
+    this.testsCount = this._testsToRun.length
+    PluginManager.emitMessage({
+      action: 'event',
+      event: 'suitePlaybackStarted',
+      options: {
+        runId: this.runId,
+        tests: suite._tests.map(test => test.export()),
+      },
+    }).then(responses => {
+      if (!this.pluginDidFail(responses)) {
+        UiState.selectTest(suite._tests[0])
+        this.startPlaying(suite._tests[0].commands[0])
+      }
     })
-    this.beforePlaying(playSuite)
   }
 
-  startPlayingFilteredTests() {
-    this.filteredTests = UiState.filteredTests
-    const runId = uuidv4()
-    const suite = { id: runId, name: '__filteredTests__' + runId }
-    this._startPlayingCollection(
-      suite,
-      this.filteredTests,
-      'filteredTestsPlaybackStarted',
-      runId
-    )
+  runningQueueFromIndex(commands, index) {
+    return commands.slice(index)
   }
 
-  startPlayingSuite() {
-    const { suite } = UiState.selectedTest
-    this._startPlayingCollection(suite, suite.tests, 'suitePlayackStarted')
+  async initPlayFromHere(command, test) {
+    // for soft-init in playback.js
+    this.isPlayFromHere = true
+
+    // to determine if control flow commands exist in test commands
+    const playbackTree = createPlaybackTree(test.commands.slice())
+
+    if (playbackTree.containsControlFlow) {
+      const choseProceed = await ModalState.showAlert({
+        isMarkdown: true,
+        type: 'info',
+        title: 'Targeted playback with control flow commands',
+        description:
+          'There are control flow commands present in your test. ' +
+          'Playing from a specific command may cause unintended test results. \n\n' +
+          'Do you want to continue or play to this command from the beginning ' +
+          'of the test?`',
+        confirmLabel: 'continue',
+        cancelLabel: 'play to here',
+      })
+      if (!choseProceed)
+        return this.startPlaying(command, { playToThisPoint: true })
+    }
+
+    // for error reporting when tree construction in playback throws
+    this.playFromHereCommandId = command.id
   }
 
   @action.bound
@@ -317,52 +340,79 @@ class PlaybackState {
     command,
     controls = {
       breakOnNextCommand: false,
+      playFromHere: false,
       playToThisPoint: false,
       recordFromHere: false,
     }
   ) {
-    const playTest = action(() => {
+    const playTest = action(async () => {
       this.breakOnNextCommand = controls.breakOnNextCommand
       const { test } = UiState.selectedTest
       this.resetState()
-      this.runId = uuidv4()
-      this.currentRunningSuite = undefined
+      if (!this.currentRunningSuite) this.runId = uuidv4()
       this.currentRunningTest = test
       this.testsCount = 1
+      let currentPlayingIndex = 0
       if (command && command instanceof Command) {
+        currentPlayingIndex = test.commands.indexOf(command)
         if (controls.playToThisPoint || controls.recordFromHere)
           this.commandTarget.load(command, controls)
+      } else {
+        const startingUrl = UiState.baseUrl
+        if (!startingUrl) {
+          UiState.setUrl(
+            await ModalState.selectBaseUrl({
+              isInvalid: true,
+              confirmLabel: 'Start playback',
+            }),
+            true
+          )
+        }
       }
-      this.runningQueue = test.commands.peek()
+      if (controls.playFromHere) {
+        await this.initPlayFromHere(command, test)
+        this.runningQueue = this.runningQueueFromIndex(
+          test.commands.slice(),
+          currentPlayingIndex
+        )
+      } else {
+        this.runningQueue = test.commands.slice()
+      }
       const pluginsLogs = {}
       if (PluginManager.plugins.length)
         this.logger.log('Preparing plugins for test run...')
-      PluginManager.emitMessage(
-        {
-          action: 'event',
-          event: 'playbackStarted',
-          options: {
-            runId: this.runId,
-            testId: this.currentRunningTest.id,
-            testName: this.currentRunningTest.name,
-            projectName: UiState._project.name,
-          },
-        },
-        (plugin, resolved) => {
-          let log = pluginsLogs[plugin.id]
+      this.emitPlaybackStarted((plugin, resolved) => {
+        let log = pluginsLogs[plugin.id]
 
-          if (!log) {
-            log = this.logger.log(`Waiting for ${plugin.name} to start...`)
-            pluginsLogs[plugin.id] = log
-          }
-
-          if (resolved) {
-            log.setStatus(LogTypes.Success)
-          }
+        if (!log) {
+          log = this.logger.log(`Waiting for ${plugin.name} to start`)
+          log.setStatus(LogTypes.Awaiting)
+          pluginsLogs[plugin.id] = log
         }
-      ).then(this.play)
+
+        if (resolved) {
+          log.setStatus(LogTypes.Success)
+        }
+      }).then(responses => {
+        if (!this.pluginDidFail(responses)) {
+          this.play()
+        }
+      })
     })
     this.beforePlaying(playTest)
+  }
+
+  pluginDidFail(responses) {
+    let didFail = false
+    responses.forEach(res => {
+      if (res.response && res.response.status === 'fatal') {
+        didFail = true
+        this.logger.error(
+          `[${responses[0].plugin.name}]: ${responses[0].response.message}`
+        )
+      }
+    })
+    return didFail
   }
 
   @action.bound
@@ -398,27 +448,39 @@ class PlaybackState {
     }
   }
 
+  emitPlaybackStarted(cb) {
+    return PluginManager.emitMessage(
+      {
+        action: 'event',
+        event: 'playbackStarted',
+        options: {
+          runId: this.runId,
+          testId: this.currentRunningTest.id,
+          testName: this.currentRunningTest.name,
+          suiteName: this.currentRunningSuite && this.currentRunningSuite.name,
+          projectName: UiState._project.name,
+          test: this.currentRunningTest.export(),
+        },
+      },
+      cb
+    )
+  }
+
   @action.bound
   playNext() {
     if (UiState.selectedTest.suite && UiState.selectedTest.suite.isParallel) {
-      variables.clear()
+      this.variables.clear()
     }
+    // remove the first test from the test queue so it doesn't get replayed
+    if (this.currentRunningSuite._tests[0].name === this._testsToRun[0].name)
+      this._testsToRun.shift()
+    // pull the next test off the test queue for execution
     this.currentRunningTest = this._testsToRun.shift()
-    this.runningQueue = this.currentRunningTest.commands.peek()
+    this.runningQueue = this.currentRunningTest.commands.slice()
     this.clearStack()
     this.errors = 0
     this.forceTestCaseFailure = false
-    PluginManager.emitMessage({
-      action: 'event',
-      event: 'playbackStarted',
-      options: {
-        runId: this.runId,
-        testId: this.currentRunningTest.id,
-        testName: this.currentRunningTest.name,
-        suiteName: this.currentRunningSuite.name,
-        projectName: UiState._project.name,
-      },
-    }).then(
+    this.emitPlaybackStarted().then(
       action(() => {
         UiState.selectTest(
           this.currentRunningTest,
@@ -464,7 +526,8 @@ class PlaybackState {
           let log = pluginsLogs[plugin.id]
 
           if (!log) {
-            log = this.logger.log(`Waiting for ${plugin.name} to finish...`)
+            log = this.logger.log(`Waiting for ${plugin.name} to finish`)
+            log.setStatus(LogTypes.Awaiting)
             pluginsLogs[plugin.id] = log
           }
 
@@ -528,6 +591,7 @@ class PlaybackState {
       }
       this.stopPlayingGracefully()
     }
+    this.paused = false
     this.commandTarget.doCleanup({ isTestAborted: this.aborted })
   }
 
@@ -560,22 +624,18 @@ class PlaybackState {
   async break(command) {
     if (this.commandTarget.is.recordFromHere) {
       this.commandTarget.doRecordFromHere(async () => {
-        ModalState.showDialog(
-          {
-            type: 'info',
-            title: 'Start recording',
-            description:
-              'You can now start recording.  \n\nThe recording will start from the command you selected.',
-            confirmLabel: 'START RECORDING',
-            cancelLabel: 'CANCEL',
-          },
-          async choseProceed => {
-            if (choseProceed) {
-              await UiState.startRecording()
-              await WindowSession.focusPlayingWindow()
-            }
-          }
-        )
+        const choseProceed = await ModalState.showAlert({
+          type: 'info',
+          title: 'Start recording',
+          description:
+            'You can now start recording.  \n\nThe recording will start from the command you selected.',
+          confirmLabel: 'start recording',
+          cancelLabel: 'cancel',
+        })
+        if (choseProceed) {
+          await UiState.startRecording()
+          await WindowSession.focusPlayingWindow()
+        }
       })
     } else {
       this.breakOnNextCommand = false
@@ -605,7 +665,17 @@ class PlaybackState {
       } else {
         if (!this.hasFailed && this.lastSelectedView) {
           UiState.changeView(this.lastSelectedView)
-          this.commandTarget.doCleanup({ isTestAborted: this.aborted })
+          this.commandTarget.doCleanup({
+            isTestAborted: this.aborted,
+            callback: () => {
+              ModalState.showAlert({
+                type: 'info',
+                title: 'Unable to reach target command',
+                description:
+                  "The target command was unreachable because it was part of a control flow branch that wasn't executed.  \n\nPlease try again.",
+              })
+            },
+          })
         }
         this.lastSelectedView = undefined
         if (this.currentRunningSuite) {
@@ -622,9 +692,16 @@ class PlaybackState {
             this.currentRunningSuite.id,
             this.hasFailed ? PlaybackStates.Failed : PlaybackStates.Passed
           )
+          this.cleanupCurrentRunningVariables()
         }
       }
     })
+  }
+
+  @action.bound
+  cleanupCurrentRunningVariables() {
+    this.currentRunningTest = undefined
+    this.currentRunningSuite = undefined
   }
 
   @action.bound
@@ -696,7 +773,7 @@ class PlaybackState {
       true
     )
     this.currentRunningTest = testCase
-    this.runningQueue = testCase.commands.peek()
+    this.runningQueue = testCase.commands.slice()
     let playbackTree = createPlaybackTree(this.runningQueue)
     this.setCurrentExecutingCommandNode(playbackTree.startingCommandNode)
     return playbackTree.startingCommandNode
@@ -707,7 +784,7 @@ class PlaybackState {
     const top = this.callstack.pop()
     this.currentRunningTest = top.caller
     this.setCurrentExecutingCommandNode(top.position.next)
-    this.runningQueue = top.caller.commands.peek()
+    this.runningQueue = top.caller.commands.slice()
     UiState.selectTest(
       this.stackCaller,
       this.currentRunningSuite,
@@ -733,7 +810,7 @@ class PlaybackState {
   resetState() {
     this.clearCommandStates()
     this.clearStack()
-    variables.clear()
+    this.variables.clear()
     this.finishedTestsCount = 0
     this.noStatisticsEffects = false
     this.failures = 0
@@ -741,6 +818,11 @@ class PlaybackState {
     this.forceTestCaseFailure = false
     this.aborted = false
     this.paused = false
+    this.isPlayFromHere = false
+    this.isPlayingControlFlowCommands = false
+    this.runningQueue = []
+    this.playFromHereCommandId = undefined
+    this.isSilent = false
   }
 }
 
@@ -750,8 +832,8 @@ export const PlaybackStates = {
   Passed: 'passed',
   Pending: 'pending',
   Undetermined: 'undetermined',
+  Awaiting: 'awaiting',
 }
 
 if (!window._playbackState) window._playbackState = new PlaybackState()
-
 export default window._playbackState

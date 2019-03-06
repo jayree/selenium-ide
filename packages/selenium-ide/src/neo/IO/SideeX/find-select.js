@@ -20,8 +20,9 @@ import UiState from '../../stores/view/UiState'
 import PlaybackState from '../../stores/view/PlaybackState'
 import ModalState from '../../stores/view/ModalState'
 import WindowSession from '../../IO/window-session'
-import { TargetTypes } from '../../models/Command'
+import { TargetTypes } from '../../models/Command/Commands'
 import Region from '../../models/Region'
+import { xlateArgument } from './formatCommand'
 
 async function getActiveTabForTest() {
   const identifier = WindowSession.currentUsedWindowId[
@@ -39,21 +40,22 @@ async function getActiveTabForTest() {
 
 export async function find(target) {
   try {
+    const xlatedTarget = xlateArgument(target, PlaybackState.variables)
     const tab = await getActiveTabForTest()
-    const region = new Region(target)
+    const region = new Region(xlatedTarget)
     await browser.windows.update(tab.windowId, {
       focused: true,
     })
     try {
       await browser.tabs.sendMessage(tab.id, {
         showElement: true,
-        targetValue: region.isValid() ? region.toJS() : target,
+        targetValue: region.isValid() ? region.toJS() : xlatedTarget,
       })
     } catch (e) {
       ModalState.showAlert({
         title: 'Element not found',
-        description: `Could not find ${target} on the page`,
-        confirmLabel: 'Close',
+        description: `Could not find ${xlatedTarget} on the page`,
+        confirmLabel: 'close',
       })
     }
   } catch (e) {
@@ -70,7 +72,7 @@ export async function select(type, rect, selectNext = false) {
         .sendMessage(tab.id, { selectMode: true, selecting: false })
         .catch(() => {})
     } else {
-      PlaybackState.stopPlaying()
+      PlaybackState.stopPlaying().catch(() => {})
       await browser.windows.update(tab.windowId, {
         focused: true,
       })
@@ -100,12 +102,12 @@ export async function select(type, rect, selectNext = false) {
 function selectTarget(target) {
   UiState.setSelectingTarget(false)
   if (UiState.selectedCommand) {
-    UiState.selectedCommand.setTarget(target[0][0])
     UiState.selectedCommand.setTargets(target)
+    UiState.selectedCommand.setTarget(target[0][0])
   } else if (UiState.selectedTest.test) {
     const command = UiState.selectedTest.test.createCommand()
-    command.setTarget(target[0][0])
     command.setTargets(target)
+    command.setTarget(target[0][0])
   }
 }
 
@@ -131,11 +133,12 @@ function handleContentScriptResponse(message, sender, sendResponse) {
 }
 
 function showNoTabAvailableDialog() {
+  UiState.windowSession.focusIDEWindow()
   ModalState.showAlert({
     title: 'Tab not found',
     description:
       'No tab is available for this test case, either continue recording it, or play it back.',
-    confirmLabel: 'Close',
+    confirmLabel: 'close',
   })
 }
 

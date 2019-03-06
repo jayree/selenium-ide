@@ -6,7 +6,7 @@
   "scripts": {
     "start": "cd packages/selenium-ide && yarn start",
     "build": "lerna run build --ignore selenium-ide-extension-boilerplate",
-    "build:ext": "cd packages/selenium-ide && yarn build-dev",
+    "build:ext": "cd packages/selenium-ide && yarn build:dev",
     "build:runner": "cd packages/selenium-side-runner && yarn build",
     "build:selianize": "cd packages/selianize && yarn build",
     "build:webdriver": "cd packages/browser-webdriver && yarn build",
@@ -17,12 +17,13 @@
     "pack:runner": "cd packages/selenium-side-runner && yarn pkg",
     "test": "jest",
     "test:ext": "jest --testMatch \"**/packages/selenium-ide/tests/**/*.spec.js\"",
-    "test:runner": "cd tests/examples && node ../../packages/selenium-side-runner/dist/index.js *.side",
+    "test:runner": "cd packages/selenium-side-runner && node dist/index.js ../../tests/examples/*.side",
     "test:webdriver": "jest --testMatch \"**/packages/browser-webdriver/tests/**/*.spec.js\"",
     "lint": "yarn lint:scripts && yarn lint:styles",
-    "lint:scripts": "eslint \"packages/*/src/**/*.js\" \"packages/*/src/**/*.jsx\" \"packages/*/__tests__/**/*.js\" \"packages/*/tests/**/*.js\" \"packages/*/__mocks__/**/*.js\" --ignore-pattern=\"extension-boilerplate\"",
+    "lint:scripts": "eslint \"packages/*/src/**/*.js\" \"packages/*/src/**/*.jsx\" \"packages/*/__tests__/**/*.js\" \"packages/*/tests/**/*.js\" \"packages/*/__mocks__/**/*.js\" \"website/**/*.js\" --ignore-pattern=\"extension-boilerplate\" --ignore-pattern=\"node_modules\"",
     "lint:styles": "stylelint \"packages/selenium-ide/src/neo/**/*.css\"",
-    "postinstall": "lerna bootstrap"
+    "postinstall": "lerna bootstrap",
+    "watch": "lerna run --no-bail --parallel watch"
   },
   "jest": {
     "testURL": "http://localhost/index.html",
